@@ -1,2 +1,2 @@
 # destructive
-Make the destructuring guide into code
+Make the [Clojure destructuring guide](https://clojure.org/guides/destructuring) into code
