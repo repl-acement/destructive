@@ -177,6 +177,7 @@
             {:keys [k1 k2]} m]
         (* k1 k2))
     (let->destructured-let (pr-str in-bindings)))
+    ;; ^^^ Working in the REPL
 
   (let [in-bindings '(let [m {:k1 1 :k2 2 :k3 3}
                            k1 (get m :k1)
