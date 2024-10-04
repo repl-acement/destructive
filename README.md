@@ -11,29 +11,30 @@ When it has a map and some bindings or expressions to access its properties, giv
 ### TODO
 - [X] Parse let and get
 - [ ] Bindings, top level keys
-  - [ ] Convert unqualified key access in bindings
-  - [ ] Convert multiple unqualified key access
-  - [ ] Convert namespaced key access
-  - [ ] Convert multiple namespaced key access
+  - [X] Round-trip unqualified key access in bindings
+  - [X] Round-trip multiple unqualified key access
+  - [ ] Round-trip namespaced key access
+  - [ ] Round-trip multiple namespaced key access
+  - [ ] Tests
 - [ ] Bindings, nested keys
-  - [ ] Convert unqualified key access in bindings
-  - [ ] Convert multiple unqualified key access
-  - [ ] Convert namespaced key access
-  - [ ] Convert multiple namespaced key access
+  - [ ] Round-trip unqualified key access in bindings
+  - [ ] Round-trip multiple unqualified key access
+  - [ ] Round-trip namespaced key access
+  - [ ] Round-trip multiple namespaced key access
   - [ ] Tests
 - [ ] Bindings, mix of top level and nested keys
   - [ ] Tests
 - [ ] Expressions, top level keys
-  - [ ] Convert unqualified key access in bindings
-  - [ ] Convert multiple unqualified key access
-  - [ ] Convert namespaced key access
-  - [ ] Convert multiple namespaced key access
+  - [ ] Round-trip unqualified key access in bindings
+  - [ ] Round-trip multiple unqualified key access
+  - [ ] Round-trip namespaced key access
+  - [ ] Round-trip multiple namespaced key access
   - [ ] Tests
 - [ ] Expressions, nested keys
-  - [ ] Convert unqualified key access in bindings
-  - [ ] Convert multiple unqualified key access
-  - [ ] Convert namespaced key access
-  - [ ] Convert multiple namespaced key access
+  - [ ] Round-trip unqualified key access in bindings
+  - [ ] Round-trip multiple unqualified key access
+  - [ ] Round-trip namespaced key access
+  - [ ] Round-trip multiple namespaced key access
   - [ ] Tests
 - [ ] Expressions, mix of top level and nested keys
   - [ ] Tests
