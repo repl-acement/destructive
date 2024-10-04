@@ -3,13 +3,9 @@
 
  :aliases
  {:test {:extra-paths ["test"]
-         :extra-deps {com.cognitect/test-runner
-                      {:git/url "https://github.com/cognitect-labs/test-runner.git"
-                       :sha "6ec7f8eef509cd14d831e8cc16e856b31327a862"}}
+         :extra-deps {io.github.cognitect-labs/test-runner
+                      {:git/tag "v0.5.1" :git/sha "dfb30dd"}}
          :jvm-opts ["-Dclojure.main.report=stderr"]
-         :main-opts ["-m" "cognitect.test-runner"]}
-
-  :clj-kondo {:extra-deps {clj-kondo/clj-kondo {:mvn/version "RELEASE"}}
-              :jvm-opts ["-Dclojure.main.report=stderr"]
-              :main-opts ["-m" "clj-kondo.main"]}}}
+         :main-opts ["-m" "cognitect.test-runner"]
+         :exec-fn cognitect.test-runner.api/test}}}
 
