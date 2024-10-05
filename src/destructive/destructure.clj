@@ -143,7 +143,8 @@
         access-map (bindings-symbols->key-access-map bindings-symbols)
         updated-bindings (update-bindings bindings access-map)
         unform-data (assoc parsed-form :bindings updated-bindings)]
-    (s/unform ::let unform-data)))
+    {:unformed (s/unform ::let unform-data)
+     :unform-data unform-data}))
 
 (defn let->destructured-let
   [form-str]
