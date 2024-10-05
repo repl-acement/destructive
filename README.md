@@ -1,3 +1,5 @@
+[![Clojure](https://github.com/repl-acement/destructive/actions/workflows/clojure.yml/badge.svg)](https://github.com/repl-acement/destructive/actions/workflows/clojure.yml)
+
 # destructive
 Make the [Clojure destructuring guide](https://clojure.org/guides/destructuring) into code
 
