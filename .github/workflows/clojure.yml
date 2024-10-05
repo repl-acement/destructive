@@ -1,0 +1,24 @@
+name: Clojure CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    uses: DeLaGuardo/setup-clojure@12.5
+      with:
+        # Clojure CLI version to make available on the path.
+        cli: # optional
+        # cljfmt version to install, `latest` can be used.
+        cljfmt: # optional
+        # To fix rate limit errors, provide `secrets.GITHUB_TOKEN` value to this field. More info: https://docs.github.com/en/actions/security-guides/automatic-token-authentication
+        github-token: # optional, default is ${{ github.token }}
+    - name: Run tests
+      run: clojure -X test
