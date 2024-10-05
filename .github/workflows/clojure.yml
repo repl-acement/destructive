@@ -14,8 +14,7 @@ jobs:
         uses: DeLaGuardo/setup-clojure@12.5
         with:
           cli: 1.12.0.1456
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run tests
         run: clojure -X:test
