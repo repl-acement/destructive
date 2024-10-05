@@ -3,8 +3,7 @@ name: Clojure
 on: [push]
 jobs:
   build:
-    permissions: write-all
-    name: Lint source code
+    name: Unit Tests
     runs-on: ubuntu-latest
 
     steps:
@@ -13,9 +12,6 @@ jobs:
 
       - name: Install Clojure
         uses: DeLaGuardo/setup-clojure@12.5
-        with:
-          cli: 1.12.0.1456
-          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run tests
         run: clojure -X:test
