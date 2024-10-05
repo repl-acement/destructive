@@ -1,24 +1,19 @@
-name: Clojure CI
-
-on:
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
-
+---
+name: Clojure
+on: [push]
 jobs:
   build:
-
+    name: Lint source code
     runs-on: ubuntu-latest
 
     steps:
-    uses: DeLaGuardo/setup-clojure@12.5
-      with:
-        # Clojure CLI version to make available on the path.
-        cli: # optional
-        # cljfmt version to install, `latest` can be used.
-        cljfmt: # optional
-        # To fix rate limit errors, provide `secrets.GITHUB_TOKEN` value to this field. More info: https://docs.github.com/en/actions/security-guides/automatic-token-authentication
-        github-token: # optional, default is ${{ github.token }}
-    - name: Run tests
-      run: clojure -X test
+      - name: Checkout
+        uses: actions/checkout@v4.1.1
+
+      - name: Install Clojure
+        uses: DeLaGuardo/setup-clojure@12.5
+        with:
+          cli: 1.12.0.1456
+
+      - name: Run tests
+        run: clojure -X:test
