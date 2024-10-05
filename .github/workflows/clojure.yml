@@ -3,6 +3,7 @@ name: Clojure
 on: [push]
 jobs:
   build:
+    permissions: write-all
     name: Lint source code
     runs-on: ubuntu-latest
 
