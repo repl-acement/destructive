@@ -3,7 +3,7 @@ name: Clojure
 on: [push]
 jobs:
   build:
-    name: Lint source code
+    name: Run Unit Tests
     runs-on: ubuntu-latest
 
     steps:
