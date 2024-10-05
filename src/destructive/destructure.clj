@@ -109,23 +109,26 @@
                [m (mapv first ks)]))))
 
 (defn drop-accessors
+  "Per key set in the access map, remove the redundant
+  accessor bindings eg drop the binding for [:local-symbol x]
+  when x is in the key set of the access map"
   [access-map bindings]
   (->> access-map
-       (mapv (fn [[_m ks]]
-               (let [ks-set (set ks)]
-                 (filter (fn [{:keys [form]}]
-                           (not (contains? ks-set (last form))))
-                         bindings))))
+       (mapv (fn [[_ ks]]
+               (remove (fn [{:keys [form]}]
+                         (contains? (set ks) (last form)))
+                       bindings)))
        flatten
        vec))
 
 (defn add-destructurings
   [access-map bindings]
-  (let [xs (mapv (fn [[m ks]]
-                   {:form [:map-destructure {:keys ks}
-                           :init-expr m]})
-                 access-map)]
-    (vec (concat bindings xs))))
+  "Per key set in the access map, add the destructuring bindings"
+  (->> access-map
+       (mapv (fn [[m ks]]
+               {:form [:map-destructure {:keys ks}], :init-expr m}))
+       (concat bindings)
+       vec))
 
 (defn update-bindings
   [bindings access-map]
@@ -135,22 +138,12 @@
 
 (defn- let-form->destructured-let
   [form]
+  ;; TODO ... make this flow more smoothly
   (let [{:keys [bindings bindings-symbols parsed-form]} (parse form)
         access-map (bindings-symbols->key-access-map bindings-symbols)
-        map-without-access-keys (reduce (fn [acc [_m ks]]
-                                          (apply dissoc acc ks))
-                                        bindings-symbols
-                                        access-map)
         updated-bindings (update-bindings bindings access-map)
-        unform-form (assoc parsed-form :bindings updated-bindings)]
-    #_(prn {:access-map access-map
-          :bindings bindings
-          :parsed-form parsed-form
-          :bindings-symbols bindings-symbols
-          :map-without-keys map-without-access-keys
-          :updated-bindings updated-bindings
-          :unform-form unform-form})
-    (s/unform ::let unform-form)))
+        unform-data (assoc parsed-form :bindings updated-bindings)]
+    (s/unform ::let unform-data)))
 
 (defn let->destructured-let
   [form-str]
@@ -160,35 +153,38 @@
        :forms forms}
       (let-form->destructured-let (first forms)))))
 
-
 (comment
   ;; `get` in bindings
   (let [in-bindings '(let [m {:k1 1 :k2 2 :k3 3}
                            k1 (get m :k1)
                            k2 (:k2 m)]
-                       (* k1 k2))]
-    ; => transform to
-    #_{:name let,
-       :bindings [{:form [:local-symbol m], :init-expr {:k1 1, :k2 2, :k3 3}}
-                  {:form [:map-destructure {:keys [k1 k2]}], :init-expr m}],
-       :exprs (* k1 k2)}
-    ; => unform to
-    #_(let [m {:k1 1 :k2 2 :k3 3}
-            {:keys [k1 k2]} m]
-        (* k1 k2))
-    (let->destructured-let (pr-str in-bindings)))
-    ;; ^^^ Working in the REPL
+                       (+ k1 k2))]
+    (->> (pr-str in-bindings)
+         let->destructured-let))
+  ; => transform to
+  #_{:name let,
+     :bindings [{:form [:local-symbol m], :init-expr {:k1 1, :k2 2, :k3 3}}
+                {:form [:map-destructure {:keys [k1 k2]}], :init-expr m}],
+     :exprs (* k1 k2)}
+  ; => unform to
+  #_(let [m {:k1 1 :k2 2 :k3 3}
+          {:keys [k1 k2]} m]
+      (* k1 k2))
+  ;; ✅Working in the REPL
 
   (let [in-bindings '(let [m {:k1 1 :k2 2 :k3 3}
                            k1 (get m :k1)
                            k2 (:k2 m)
                            k4 (:k4 {:k4 3 :kx 0})]
                        (* k1 k2 k4))]
-    ; => transform to
-    #_(let [m {:k1 1 :k2 2 :k3 3}
-            {:keys [k1]} m]
-        k1)
-    (let->destructured-let (pr-str in-bindings)))
+    (->> (pr-str in-bindings)
+         let->destructured-let))
+  ; => transform to
+  #_(let [m {:k1 1, :k2 2, :k3 3}
+          k4 (:k4 {:k4 3, :kx 0})
+          {:keys [k1 k2]}]
+      (* k1 k2 k4))
+  ;; ✅Working in the REPL
 
   ;; `get` in expression list
   (let [in-exprs '(let [m {:k1 1 :k2 2 :k3 3}]
