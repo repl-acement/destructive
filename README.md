@@ -14,28 +14,40 @@ When it has a map and some bindings or expressions to access its properties, giv
 - [X] Parse let and get
 - [ ] Bindings, top level keys
   - [X] Round-trip unqualified key access in bindings
+  - [X] Tests using get and direct map lookups
   - [X] Round-trip multiple unqualified key access
+  - [X] Tests using get and direct map lookups
   - [ ] Round-trip namespaced key access
+  - [ ] Tests
   - [ ] Round-trip multiple namespaced key access
   - [ ] Tests
 - [ ] Bindings, nested keys
   - [ ] Round-trip unqualified key access in bindings
+  - [ ] Tests
   - [ ] Round-trip multiple unqualified key access
+  - [ ] Tests
   - [ ] Round-trip namespaced key access
+  - [ ] Tests
   - [ ] Round-trip multiple namespaced key access
   - [ ] Tests
 - [ ] Bindings, mix of top level and nested keys
   - [ ] Tests
 - [ ] Expressions, top level keys
   - [ ] Round-trip unqualified key access in bindings
+  - [ ] Tests
   - [ ] Round-trip multiple unqualified key access
+  - [ ] Tests
   - [ ] Round-trip namespaced key access
+  - [ ] Tests
   - [ ] Round-trip multiple namespaced key access
   - [ ] Tests
 - [ ] Expressions, nested keys
   - [ ] Round-trip unqualified key access in bindings
+  - [ ] Tests
   - [ ] Round-trip multiple unqualified key access
+  - [ ] Tests
   - [ ] Round-trip namespaced key access
+  - [ ] Tests
   - [ ] Round-trip multiple namespaced key access
   - [ ] Tests
 - [ ] Expressions, mix of top level and nested keys

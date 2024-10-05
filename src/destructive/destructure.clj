@@ -154,23 +154,6 @@
       (let-form->destructured-let (first forms)))))
 
 (comment
-  ;; `get` in bindings
-  (let [in-bindings '(let [m {:k1 1 :k2 2 :k3 3}
-                           k1 (get m :k1)
-                           k2 (:k2 m)]
-                       (+ k1 k2))]
-    (->> (pr-str in-bindings)
-         let->destructured-let))
-  ; => transform to
-  #_{:name let,
-     :bindings [{:form [:local-symbol m], :init-expr {:k1 1, :k2 2, :k3 3}}
-                {:form [:map-destructure {:keys [k1 k2]}], :init-expr m}],
-     :exprs (* k1 k2)}
-  ; => unform to
-  #_(let [m {:k1 1 :k2 2 :k3 3}
-          {:keys [k1 k2]} m]
-      (* k1 k2))
-  ;; ✅Working in the REPL
 
   (let [in-bindings '(let [m {:k1 1 :k2 2 :k3 3}
                            k1 (get m :k1)
