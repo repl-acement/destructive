@@ -50,7 +50,11 @@
 (defn parse-init-expr
   [parsed-data k expr-form]
   (let [conform-result (s/conform ::form expr-form)]
+    (prn :conform-result conform-result)
     (cond
+      (s/invalid? conform-result)
+      parsed-data
+
       (map? expr-form)
       (assoc parsed-data k {:literal expr-form})
 
@@ -143,6 +147,7 @@
         access-map (bindings-symbols->key-access-map bindings-symbols)
         updated-bindings (update-bindings bindings access-map)
         unform-data (assoc parsed-form :bindings updated-bindings)]
+    (prn :unform-data unform-data)
     {:unformed (s/unform ::let unform-data)
      :unform-data unform-data}))
 
@@ -158,8 +163,9 @@
 
   (let [in-bindings '(let [m {:k1 1 :k2 2 :k3 3}
                            k1 (get m :k1)
-                           k2 (:k2 m)
-                           k4 (:k4 {:k4 3 :kx 0})]
+                           x 1
+                           y [1 2]
+                           z (vec (range 10))]
                        (* k1 k2 k4))]
     (->> (pr-str in-bindings)
          let->destructured-let))
