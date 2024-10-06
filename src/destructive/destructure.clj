@@ -50,8 +50,9 @@
 (defn parse-init-expr
   [parsed-data k expr-form]
   (let [conform-result (s/conform ::form expr-form)]
-    (prn :conform-result conform-result)
     (cond
+      ;; TODO
+      ;; need a better "get out of jail" card
       (s/invalid? conform-result)
       parsed-data
 
@@ -142,12 +143,16 @@
 
 (defn- let-form->destructured-let
   [form]
-  ;; TODO ... make this flow more smoothly
+  ;; TODO ... have a clearer data structure
+  #_{:parse {}
+     :analysis {}
+     :transform {}
+     :output {}}
+
   (let [{:keys [bindings bindings-symbols parsed-form]} (parse form)
         access-map (bindings-symbols->key-access-map bindings-symbols)
         updated-bindings (update-bindings bindings access-map)
         unform-data (assoc parsed-form :bindings updated-bindings)]
-    (prn :unform-data unform-data)
     {:unformed (s/unform ::let unform-data)
      :unform-data unform-data}))
 
@@ -161,20 +166,21 @@
 
 (comment
 
-  (let [in-bindings '(let [m {:k1 1 :k2 2 :k3 3}
-                           k1 (get m :k1)
-                           x 1
-                           y [1 2]
-                           z (vec (range 10))]
-                       (* k1 k2 k4))]
-    (->> (pr-str in-bindings)
-         let->destructured-let))
-  ; => transform to
-  #_(let [m {:k1 1, :k2 2, :k3 3}
-          k4 (:k4 {:k4 3, :kx 0})
-          {:keys [k1 k2]}]
-      (* k1 k2 k4))
-  ;; ✅Working in the REPL
+  (let [in-exprs '(let [m {:a/k1 1 :k2 2 :k3 3}
+                        k1 (:a/k1 m)]
+                    (+ k1 k1))]
+    ; => transform to
+    #_{:name let,
+       :bindings [{:form [:local-symbol m], :init-expr {:a/k1 1, :a/k2 2, :k3 3}}
+                  {:form [:map-destructure #:a{:keys [k1 k2]}], :init-expr m}],
+       :exprs (+ k1 k2)}
+    ; => unform to
+    #_(let [m {:a/k1 1, :a/k2 2, :k3 3}
+            #:a{:keys [k1 k2]} m]
+        (+ k1 k2))
+    (clojure.pprint/pprint
+      (let->destructured-let (pr-str in-exprs))))
+
 
   ;; `get` in expression list
   (let [in-exprs '(let [m {:k1 1 :k2 2 :k3 3}]
@@ -183,7 +189,8 @@
     #_(let [m {:k1 1 :k2 2 :k3 3}
             {:keys [k1]} m]
         k1)
-    (let->destructured-let (pr-str in-exprs)))
+    (clojure.pprint/pprint
+      (let->destructured-let (pr-str in-exprs))))
 
   )
 
