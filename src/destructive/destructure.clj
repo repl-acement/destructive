@@ -1,7 +1,7 @@
 (ns destructive.destructure
   (:require
-    [clojure.spec.alpha :as s]
     [clojure.core.specs.alpha :as specs]
+    [clojure.spec.alpha :as s]
     [destructive.form-reader :as form-reader]))
 
 (set! *warn-on-reflection* true)
@@ -34,76 +34,85 @@
 (s/def ::form
   (s/or :let ::let
         :get ::get-k-from-m
-        :lookup ::map-lookup))
+        :lookup ::map-lookup
+        :literal-map map?
+        :unknown any?))
 
 (defn lookup-symbols
   "Read the data and resolve any symbols.
   Return the updated map of symbols."
-  [parsed-data symbol-name]
+  [symbol-name parsed-data]
   (let [k (keyword (name symbol-name))
         v {:name (name symbol-name)}
-        ref (get parsed-data k)]
-    (assoc parsed-data
-      symbol-name {k (cond-> v
-                             ref (assoc :ref ref))})))
+        ref (get parsed-data k)
+        symbol-data (cond-> v
+                            ref (assoc :ref ref))]
+    (assoc parsed-data symbol-name {k symbol-data})))
 
 (defn parse-init-expr
-  [parsed-data k expr-form]
-  (let [conform-result (s/conform ::form expr-form)]
-    (cond
-      ;; TODO
-      ;; need a better "get out of jail" card
-      (s/invalid? conform-result)
-      parsed-data
+  [k init-expr-spec expr-form parsed-data]
+  (let [conform-result (s/conform init-expr-spec expr-form)]
+    (if (s/invalid? conform-result)
+      (throw (ex-info "Parse init-expr conform failure"
+                      {:error :unsupported-form
+                       :spec init-expr-spec
+                       :form expr-form})))
+    (let [[form-name conformed-form] conform-result]
+      (cond
+        (= :literal-map form-name)
+        (assoc parsed-data k {:literal expr-form})
 
-      (map? expr-form)
-      (assoc parsed-data k {:literal expr-form})
+        (contains? #{:get :lookup} form-name)
+        (let [{:keys [key map]} conformed-form]
+          (assoc parsed-data k {:form-name form-name
+                                :parsed-form conformed-form
+                                :key key
+                                :map (let [[map-type v] map]
+                                       (condp = map-type
+                                         :symbol {:ref v}
+                                         {map-type v}))}))
 
-      (contains? #{:get :lookup} (first conform-result))
-      (let [[form-name {:keys [key map] :as conformed-form}] conform-result]
-        (assoc parsed-data
-          k {:form form-name
-             :conformed-form conformed-form
-             :key key
-             :map (let [[map-type v] map]
-                    (condp = map-type
-                      :symbol {:ref v}
-                      {map-type v}))}))
+        (= :unknown form-name)
+        parsed-data
 
-      :else
-      parsed-data)))
+        :else
+        (throw (ex-info "Parse init-expr unknown failure"
+                        {:error :unknown-error
+                         :spec init-expr-spec
+                         :form expr-form}))))))
 
-(defn add-binding-symbols
-  [[form-name {:keys [bindings] :as parsed-form}]]
-  (assoc {}
-    :form-name form-name
-    :parsed-form parsed-form
-    :bindings bindings
-    :bindings-symbols (reduce (fn [symbols {:keys [form init-expr]}]
-                                (let [sym (last form)]
-                                  (-> symbols
-                                      (lookup-symbols sym)
-                                      (parse-init-expr sym init-expr))))
-                              {}
-                              bindings)
-    :exprs (:exprs parsed-form)
-    :exprs-symbols [:TODO]))
+(defn ->binding-symbols
+  [{:keys [bindings]} init-expr-spec]
+  (reduce (fn [symbols {:keys [form init-expr]}]
+            (let [sym (last form)]
+              (->> symbols
+                   (lookup-symbols sym)
+                   (parse-init-expr sym init-expr-spec init-expr))))
+          {}
+          bindings))
 
 (defn parse
-  [form]
-  (let [conformant-form (s/conform ::form form)]
+  "Produce a map with the :parse key with data from this phase.
+  Throw when `form` does not conform to `spec`"
+  [form spec]
+  (let [conformant-form (s/conform spec form)]
     (if (= ::s/invalid conformant-form)
-      {:error :unsupported-form
-       :form form}
-      (add-binding-symbols conformant-form))))
+      (throw (ex-info "Parse failure" {:error :unsupported-form
+                                       :form form}))
+      (let [[form-name {:keys [bindings] :as parsed-form}] conformant-form
+            ;; is this spec the same as the incoming spec
+            bindings-symbols (->binding-symbols parsed-form spec)]
+        {:parse {:form-name form-name
+                 :parsed-form parsed-form
+                 :bindings-symbols bindings-symbols}}))))
 
 (defn map-accessor?
-  [syms {:keys [form] :as sym-data}]
-  (when (contains? #{:get :lookup} form)
+  [syms {:keys [form-name] :as sym-data}]
+  (when (contains? #{:get :lookup} form-name)
     (let [{:keys [map]} sym-data]
       (some? (get syms (:ref map))))))
 
-(defn- bindings-symbols->key-access-map
+(defn bindings-symbols->symbol-accessors
   [bindings-symbols]
   (->> bindings-symbols
        (keep (fn [[k {:keys [map] :as v}]]
@@ -112,6 +121,12 @@
        (group-by last)
        (mapv (fn [[m ks]]
                [m (mapv first ks)]))))
+
+(defn- parse-data->symbol-accessors
+  [{{:keys [bindings-symbols]} :parse :as data}]
+  (let [symbol-accessors (bindings-symbols->symbol-accessors bindings-symbols)]
+    (assoc data
+      :analysis {:bindings {:symbol-accessors symbol-accessors}})))
 
 (defn drop-accessors
   "Per key set in the access map, remove the redundant
@@ -135,62 +150,47 @@
        (concat bindings)
        vec))
 
-(defn update-bindings
-  [bindings access-map]
-  (->> bindings
-       (drop-accessors access-map)
-       (add-destructurings access-map)))
+(defn ->destructured-bindings
+  [{:keys [parse analysis] :as data}]
+  (let [bindings (get-in parse [:parsed-form :bindings])
+        symbol-accessors (get-in analysis [:bindings :symbol-accessors])
+        updated-bindings (->> bindings
+                              (drop-accessors symbol-accessors)
+                              (add-destructurings symbol-accessors))]
+    (assoc data :transform {:bindings updated-bindings})))
+
+(defn ->unform-data
+  [{:keys [parse transform] :as data}]
+  (let [parsed-form (:parsed-form parse)
+        updated-bindings (:bindings transform)
+        unform-form (assoc parsed-form :bindings updated-bindings)]
+    (assoc data :unform {:unform-form unform-form})))
 
 (defn- let-form->destructured-let
-  [form]
-  ;; TODO ... have a clearer data structure
-  #_{:parse {}
-     :analysis {}
-     :transform {}
-     :output {}}
-
-  (let [{:keys [bindings bindings-symbols parsed-form]} (parse form)
-        access-map (bindings-symbols->key-access-map bindings-symbols)
-        updated-bindings (update-bindings bindings access-map)
-        unform-data (assoc parsed-form :bindings updated-bindings)]
-    {:unformed (s/unform ::let unform-data)
-     :unform-data unform-data}))
+  [form form-spec]
+  (let [with-unform-data (->> (parse form form-spec)
+                              parse-data->symbol-accessors
+                              ->destructured-bindings
+                              ->unform-data)]
+    (->> (get-in with-unform-data [:unform :unform-form])
+         (s/unform ::let)
+         (assoc-in with-unform-data [:unform :unformed]))))
 
 (defn let->destructured-let
   [form-str]
-  (let [forms (form-reader/message->forms form-str)]
+  (let [forms (form-reader/message->forms form-str)
+        form-spec ::form]
     (if-not (= 1 (count forms))
       {:error :only-one-form-supported
        :forms forms}
-      (let-form->destructured-let (first forms)))))
+      (let-form->destructured-let (first forms) form-spec))))
 
 (comment
 
-  (let [in-exprs '(let [m {:a/k1 1 :k2 2 :k3 3}
-                        k1 (:a/k1 m)]
+  (let [in-exprs '(let [m {:k1 1 :k2 2 :k3 3}
+                        k1 (:k1 m)]
                     (+ k1 k1))]
-    ; => transform to
-    #_{:name let,
-       :bindings [{:form [:local-symbol m], :init-expr {:a/k1 1, :a/k2 2, :k3 3}}
-                  {:form [:map-destructure #:a{:keys [k1 k2]}], :init-expr m}],
-       :exprs (+ k1 k2)}
-    ; => unform to
-    #_(let [m {:a/k1 1, :a/k2 2, :k3 3}
-            #:a{:keys [k1 k2]} m]
-        (+ k1 k2))
-    (clojure.pprint/pprint
-      (let->destructured-let (pr-str in-exprs))))
-
-
-  ;; `get` in expression list
-  (let [in-exprs '(let [m {:k1 1 :k2 2 :k3 3}]
-                    (get m :k1))]
-    ; => transform to
-    #_(let [m {:k1 1 :k2 2 :k3 3}
-            {:keys [k1]} m]
-        k1)
-    (clojure.pprint/pprint
-      (let->destructured-let (pr-str in-exprs))))
+    (let->destructured-let (pr-str in-exprs)))
 
   )
 
