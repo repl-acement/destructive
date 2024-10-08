@@ -92,19 +92,18 @@
           bindings))
 
 (defn parse
-  "Produce a map with the :parse key with data from this phase.
-  Throw when `form` does not conform to `spec`"
-  [form spec]
-  (let [conformant-form (s/conform spec form)]
+  "Add a :parse key to the data map with data from this phase.
+  Throws when `form` does not conform to `spec`"
+  [{{:keys [edn-form spec]} :inputs :as data}]
+  (let [conformant-form (s/conform spec edn-form)]
     (if (= ::s/invalid conformant-form)
-      (throw (ex-info "Parse failure" {:error :unsupported-form
-                                       :form form}))
-      (let [[form-name {:keys [bindings] :as parsed-form}] conformant-form
-            ;; is this spec the same as the incoming spec
+      (throw (ex-info "Parse failure" (assoc data :error :unsupported-form)))
+      (let [[form-name parsed-form] conformant-form
+            ;; TODO should this spec be the same as the incoming spec? Probably!
             bindings-symbols (->binding-symbols parsed-form spec)]
-        {:parse {:form-name form-name
-                 :parsed-form parsed-form
-                 :bindings-symbols bindings-symbols}}))))
+        (assoc data :parse {:form-name form-name
+                            :parsed-form parsed-form
+                            :bindings-symbols bindings-symbols})))))
 
 (defn map-accessor?
   [syms {:keys [form-name] :as sym-data}]
@@ -122,7 +121,7 @@
        (mapv (fn [[m ks]]
                [m (mapv first ks)]))))
 
-(defn- parse-data->symbol-accessors
+(defn- ->symbol-accessors
   [{{:keys [bindings-symbols]} :parse :as data}]
   (let [symbol-accessors (bindings-symbols->symbol-accessors bindings-symbols)]
     (assoc data
@@ -167,14 +166,14 @@
     (assoc data :unform {:unform-form unform-form})))
 
 (defn- let-form->destructured-let
-  [form form-spec]
-  (let [with-unform-data (->> (parse form form-spec)
-                              parse-data->symbol-accessors
-                              ->destructured-bindings
-                              ->unform-data)]
-    (->> (get-in with-unform-data [:unform :unform-form])
+  [data]
+  (let [processed-data (->> (parse data)
+                            ->symbol-accessors
+                            ->destructured-bindings
+                            ->unform-data)]
+    (->> (get-in processed-data [:unform :unform-form])
          (s/unform ::let)
-         (assoc-in with-unform-data [:unform :unformed]))))
+         (assoc-in processed-data [:unform :unformed]))))
 
 (defn let->destructured-let
   [form-str]
@@ -182,8 +181,11 @@
         form-spec ::form]
     (if-not (= 1 (count forms))
       {:error :only-one-form-supported
+       :input form-str
        :forms forms}
-      (let-form->destructured-let (first forms) form-spec))))
+      (let-form->destructured-let {:inputs {:string-form form-str
+                                            :edn-form (first forms)
+                                            :spec form-spec}}))))
 
 (comment
 
