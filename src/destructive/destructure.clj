@@ -17,8 +17,7 @@
                      ::specs/bindings)
     :exprs (s/? any?)))
 
-;; A less general version of get that works only
-;; on maps with keywords as keys
+;; A spec for get that works only on maps, with keywords as keys
 (s/def ::get-k-from-m
   (s/cat
     :name (s/and symbol? #(= 'get %))

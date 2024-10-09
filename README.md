@@ -56,3 +56,10 @@ When it has a map and some bindings or expressions to access its properties, giv
   - [ ] Tests
 - [ ] Linter checks
 
+## References
+
+I found this detailed post from [Yehonathan Sharvit](https://blog.klipse.tech/) especially useful in the understanding of how to manipulate the data that is produced by `conform` and ensure that it stays well-formed for the `unform` function.
+
+https://blog.klipse.tech/clojure/2019/03/08/spec-custom-defn.html
+
+
