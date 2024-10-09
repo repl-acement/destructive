@@ -1,4 +1,5 @@
 (ns destructive.core-specs
+  "Extensions and patches to the definitions clojure.core.specs"
   (:require [clojure.spec.alpha :as s]
             [clojure.core.specs.alpha :as specs]))
 

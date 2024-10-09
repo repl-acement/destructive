@@ -1,6 +1,7 @@
 (ns destructive.form-reader
-  (:import (clojure.lang LineNumberingPushbackReader)
-           (java.io StringReader)))
+  (:import
+    (clojure.lang LineNumberingPushbackReader)
+    (java.io StringReader)))
 
 (set! *warn-on-reflection* true)
 (set! *default-data-reader-fn* tagged-literal)
@@ -15,7 +16,7 @@
 (defn message->forms
   "Produce a list of forms read from string `s`. Any read failure throws"
   [s]
-  (let [EOF    (Object.)
+  (let [EOF (Object.)
         reader (LineNumberingPushbackReader. (StringReader. s))]
     (reduce (fn [forms [form _]]
               (if (identical? form EOF)

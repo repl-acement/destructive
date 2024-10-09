@@ -37,7 +37,7 @@
         :literal-map map?
         :unknown any?))
 
-(defn lookup-symbols
+(defn- lookup-symbols
   "Read the data and resolve any symbols.
   Return the updated map of symbols."
   [symbol-name parsed-data]
@@ -48,7 +48,7 @@
                             ref (assoc :ref ref))]
     (assoc parsed-data symbol-name {k symbol-data})))
 
-(defn parse-init-expr
+(defn- parse-init-expr
   [k init-expr-spec expr-form parsed-data]
   (let [conform-result (s/conform init-expr-spec expr-form)]
     (if (s/invalid? conform-result)
@@ -80,7 +80,7 @@
                          :spec init-expr-spec
                          :form expr-form}))))))
 
-(defn ->binding-symbols
+(defn- ->binding-symbols
   [{:keys [bindings]} init-expr-spec]
   (reduce (fn [symbols {:keys [form init-expr]}]
             (let [sym (last form)]
@@ -90,7 +90,7 @@
           {}
           bindings))
 
-(defn parse
+(defn- parse
   "Add a :parse key to the data map with data from this phase.
   Throws when `form` does not conform to `spec`"
   [{{:keys [edn-form spec]} :inputs :as data}]
@@ -104,13 +104,13 @@
                             :parsed-form parsed-form
                             :bindings-symbols bindings-symbols})))))
 
-(defn map-accessor?
+(defn- map-accessor?
   [syms {:keys [form-name] :as sym-data}]
   (when (contains? #{:get :lookup} form-name)
     (let [{:keys [map]} sym-data]
       (some? (get syms (:ref map))))))
 
-(defn bindings-symbols->symbol-accessors
+(defn- bindings-symbols->symbol-accessors
   [bindings-symbols]
   (->> bindings-symbols
        (keep (fn [[k {:keys [map] :as v}]]
@@ -126,7 +126,7 @@
     (assoc data
       :analysis {:bindings {:symbol-accessors symbol-accessors}})))
 
-(defn drop-accessors
+(defn- drop-accessors
   "Per key set in the access map, remove the redundant
   accessor bindings eg drop the binding for [:local-symbol x]
   when x is in the key set of the access map"
@@ -139,7 +139,7 @@
        flatten
        vec))
 
-(defn add-destructurings
+(defn- add-destructurings
   [access-map bindings]
   "Per key set in the access map, add the destructuring bindings"
   (->> access-map
@@ -148,7 +148,7 @@
        (concat bindings)
        vec))
 
-(defn ->destructured-bindings
+(defn- ->destructured-bindings
   [{:keys [parse analysis] :as data}]
   (let [bindings (get-in parse [:parsed-form :bindings])
         symbol-accessors (get-in analysis [:bindings :symbol-accessors])
@@ -157,7 +157,7 @@
                               (add-destructurings symbol-accessors))]
     (assoc data :transform {:bindings updated-bindings})))
 
-(defn ->unform-data
+(defn- ->unform-data
   [{:keys [parse transform] :as data}]
   (let [parsed-form (:parsed-form parse)
         updated-bindings (:bindings transform)
