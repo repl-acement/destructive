@@ -242,27 +242,31 @@
 (comment
 
   (let [in-exprs '(let [m {:k1 1 :k2 2 :k3 3}
-                        k1 (:k1 m)]
-                    (+ k1 k1))]
+                        k1 (:k1 m)
+                        k2 (:k2 m)
+                        k3 (get m :k3)]
+                    (+ k1 k2 k3))]
     (let->destructured-let (pr-str in-exprs)))
   ;; ^^^ WORKS
 
 
-  (let [in-exprs '(let [m {:an-ns/k1 1}
-                        k1 (:an-ns/k1 m)]
-                    (+ k1 k1))]
+  (let [in-exprs '(let [m {:an-ns/k1 1 :k2 2 :k3 3}
+                        k1 (:an-ns/k1 m)
+                        k2 (:k2 m)
+                        k3 (get m :k3)]
+                    (+ k1 k2 k3))]
     (let->destructured-let (pr-str in-exprs)))
   ;; ^^^ WORKS
 
-  (let [in-exprs '(let [m {:an-ns/k1 1 :an-ns/k2 2}
-                        x (:an-ns/k2 m)]
-                    (+ k1 x))]
+  (let [in-exprs '(let [m {:an-ns/k1 1 :an-ns/k2 2 :k3 3 :k4 4}
+                        k1 (:an-ns/k1 m)
+                        x (:an-ns/k2 m)
+                        k3 (:k3 m)
+                        k4 (get m :k4)]
+                    (+ k1 x k3 k4))]
     (let->destructured-let (pr-str in-exprs)))
-  ;; does not work :(
-  ;; => (let [m {:an-ns/k1 1, :an-ns/k2 2}
-  ;;          {:an-ns/keys [x]} m] (+ k1 x))
-  ;; :an-ns/x does not exist so we need to rename the
-  ;; key to match the binding
+  ;; ^^^ WORKS
+
 
   )
 
