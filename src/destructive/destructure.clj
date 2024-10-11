@@ -2,7 +2,9 @@
   (:require
     [clojure.core.specs.alpha :as specs]
     [clojure.spec.alpha :as s]
-    [destructive.form-reader :as form-reader]))
+    [destructive.form-reader :as form-reader])
+  (:import (clojure.lang IPersistentMap)
+           (java.io Writer)))
 
 (set! *warn-on-reflection* true)
 
@@ -11,6 +13,13 @@
         :symbol symbol?))
 
 (s/def ::let
+  (s/cat
+    :name (s/and symbol? #(= 'let %))
+    :bindings (s/and (s/conformer identity vec)
+                     ::specs/bindings)
+    :exprs (s/? any?)))
+
+(s/def ::let-qualified
   (s/cat
     :name (s/and symbol? #(= 'let %))
     :bindings (s/and (s/conformer identity vec)
@@ -36,6 +45,11 @@
         :lookup ::map-lookup
         :literal-map map?
         :unknown any?))
+
+(defn keyword-parts [k]
+  (cond-> {:keyword k
+           :name (name k)}
+          (qualified-keyword? k) (assoc :namespace (namespace k))))
 
 (defn- lookup-symbols
   "Read the data and resolve any symbols.
@@ -110,51 +124,87 @@
     (let [{:keys [map]} sym-data]
       (some? (get syms (:ref map))))))
 
-(defn- bindings-symbols->symbol-accessors
+(defn- bindings-symbols->map-accessors
   [bindings-symbols]
   (->> bindings-symbols
-       (keep (fn [[k {:keys [map] :as v}]]
+       (keep (fn [[k {:keys [map key] :as v}]]
                (when (map-accessor? bindings-symbols v)
-                 [k (:ref map)])))
-       (group-by last)
-       (mapv (fn [[m ks]]
-               [m (mapv first ks)]))))
+                 {:symbol (:ref map)
+                  :accessor k
+                  :key (keyword-parts key)})))
+       (group-by :symbol)))
 
 (defn- ->symbol-accessors
   [{{:keys [bindings-symbols]} :parse :as data}]
-  (let [symbol-accessors (bindings-symbols->symbol-accessors bindings-symbols)]
+  (let [symbol-accessors (bindings-symbols->map-accessors bindings-symbols)]
     (assoc data
-      :analysis {:bindings {:symbol-accessors symbol-accessors}})))
+      :analysis {:bindings {:map-accessors symbol-accessors}})))
 
 (defn- drop-accessors
   "Per key set in the access map, remove the redundant
   accessor bindings eg drop the binding for [:local-symbol x]
   when x is in the key set of the access map"
-  [access-map bindings]
-  (->> access-map
-       (mapv (fn [[_ ks]]
-               (remove (fn [{:keys [form]}]
-                         (contains? (set ks) (last form)))
-                       bindings)))
+  [map-accessors bindings]
+  ;; TODO ... this seems ugly, let's refactor!
+  (->> map-accessors
+       (mapv (fn [[_ accessor-data]]
+               (let [accessor-set (->> accessor-data (map :accessor) set)]
+                 (remove (fn [{:keys [form]}]
+                           (let [local-symbol (last form)]
+                             (contains? accessor-set local-symbol)))
+                         bindings))))
        flatten
        vec))
 
+#_[{:symbol m, :accessor k1, :key {:keyword :k1, :name "k1"}}
+   {:symbol m, :accessor k2, :key {:keyword :k2, :name "k2"}}]
+
+;; target => {:keys [k1 k2]}
+
+#_[{:symbol m,
+    :accessor k1,
+    :key {:keyword :an-ns/k1, :name "k1", :namespace "an-ns"}}
+   {:symbol m,
+    :accessor k2,
+    :key {:keyword :k2, :name "k2"}}]
+
+;; target => {:an-ns/keys [k1], :keys [k2]}
+
+(defn keys-destructurings
+  [accessor-data]
+  (reduce
+    (fn [acc {:keys [accessor key]}]
+      (let [{:keys [namespace]} key
+            access-key (keyword namespace "keys")]
+        (update acc access-key #(-> (conj % accessor) vec))))
+    {}
+    accessor-data))
+
+;; TODO: add code to cope with
+#_(let [m {:an-ns/k1 1 :no-ns 2}
+        k1 (:an-ns/k1 m)
+        k2 (:no-ns m)]
+    (+ k1 k2))
+; => where k2 needs to be renamed to no-ns in the exprs when it is destructured
+
 (defn- add-destructurings
-  [access-map bindings]
+  [map-accessors bindings]
   "Per key set in the access map, add the destructuring bindings"
-  (->> access-map
-       (mapv (fn [[m ks]]
-               {:form [:map-destructure {:keys ks}], :init-expr m}))
+  (->> map-accessors
+       (mapv (fn [[map-symbol accessor-data]]
+               (let [destructurings (keys-destructurings accessor-data)]
+                 {:form [:map-destructure destructurings]
+                  :init-expr map-symbol})))
        (concat bindings)
        vec))
 
 (defn- ->destructured-bindings
   [{:keys [parse analysis] :as data}]
   (let [bindings (get-in parse [:parsed-form :bindings])
-        symbol-accessors (get-in analysis [:bindings :symbol-accessors])
+        map-accessors (get-in analysis [:bindings :map-accessors])
         updated-bindings (->> bindings
-                              (drop-accessors symbol-accessors)
-                              (add-destructurings symbol-accessors))]
+                              (drop-accessors map-accessors)
+                              (add-destructurings map-accessors))]
     (assoc data :transform {:bindings updated-bindings})))
 
 (defn- ->unform-data
@@ -192,6 +242,21 @@
                         k1 (:k1 m)]
                     (+ k1 k1))]
     (let->destructured-let (pr-str in-exprs)))
+  ;; ^^^ WORKS
+
+
+  (let [in-exprs '(let [m {:an-ns/k1 1}
+                        k1 (:an-ns/k1 m)]
+                    (+ k1 k1))]
+    (let->destructured-let (pr-str in-exprs)))
+  ;; ^^^ WORKS
 
   )
 
+;; Ensure that qualified keys are properly emitted
+;; ref https://clojuredocs.org/clojure.core/*print-namespace-maps*
+;; ht to Lasse Määttä who suggested it via #clojure-spec on the Clojurian Slack
+(defmethod print-method IPersistentMap
+  [m, ^Writer w]
+  (#'clojure.core/print-meta m w)
+  (#'clojure.core/print-map m #'clojure.core/pr-on w))
