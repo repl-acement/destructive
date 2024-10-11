@@ -96,13 +96,16 @@
 
 (defn- ->binding-symbols
   [{:keys [bindings]} init-expr-spec]
-  (reduce (fn [symbols {:keys [form init-expr]}]
-            (let [sym (last form)]
-              (->> symbols
-                   (lookup-symbols sym)
-                   (parse-init-expr sym init-expr-spec init-expr))))
-          {}
-          bindings))
+  (reduce
+    (fn [symbols {:keys [form init-expr]}]
+      (let [[form-type form-expr] form]
+        (if (not= :local-symbol form-type)
+          symbols
+          (->> symbols
+               (lookup-symbols form-expr)
+               (parse-init-expr form-expr init-expr-spec init-expr)))))
+    {}
+    bindings))
 
 (defn- parse
   "Add a :parse key to the data map with data from this phase.
@@ -146,15 +149,18 @@
   when x is in the key set of the access map"
   [map-accessors bindings]
   ;; TODO ... this seems ugly, let's refactor!
-  (->> map-accessors
-       (mapv (fn [[_ accessor-data]]
-               (let [accessor-set (->> accessor-data (map :accessor) set)]
-                 (remove (fn [{:keys [form]}]
-                           (let [local-symbol (last form)]
-                             (contains? accessor-set local-symbol)))
-                         bindings))))
-       flatten
-       vec))
+  ;;
+  (if (empty? map-accessors)
+    bindings
+    (->> map-accessors
+         (mapv (fn [[_ accessor-data]]
+                 (let [accessor-set (->> accessor-data (map :accessor) set)]
+                   (remove (fn [{:keys [form]}]
+                             (let [local-symbol (last form)]
+                               (contains? accessor-set local-symbol)))
+                           bindings))))
+         flatten
+         vec)))
 
 #_[{:symbol m, :accessor k1, :key {:keyword :k1, :name "k1"}}
    {:symbol m, :accessor k2, :key {:keyword :k2, :name "k2"}}]
@@ -193,13 +199,12 @@
 (defn- add-destructurings
   [map-accessors bindings]
   "Per key set in the access map, add the destructuring bindings"
-  (->> map-accessors
-       (mapv (fn [[map-symbol accessor-data]]
-               (let [destructurings (keys-destructurings accessor-data)]
-                 {:form [:map-destructure destructurings]
-                  :init-expr map-symbol})))
-       (concat bindings)
-       vec))
+  (let [extra-bindings (->> map-accessors
+                            (mapv (fn [[map-symbol accessor-data]]
+                                    (let [destructurings (keys-destructurings accessor-data)]
+                                      {:form [:map-destructure destructurings]
+                                       :init-expr map-symbol}))))]
+    (vec (concat bindings extra-bindings))))
 
 (defn- ->destructured-bindings
   [{:keys [parse analysis] :as data}]
@@ -247,8 +252,6 @@
                         k3 (get m :k3)]
                     (+ k1 k2 k3))]
     (let->destructured-let (pr-str in-exprs)))
-  ;; ^^^ WORKS
-
 
   (let [in-exprs '(let [m {:an-ns/k1 1 :k2 2 :k3 3}
                         k1 (:an-ns/k1 m)
@@ -256,7 +259,6 @@
                         k3 (get m :k3)]
                     (+ k1 k2 k3))]
     (let->destructured-let (pr-str in-exprs)))
-  ;; ^^^ WORKS
 
   (let [in-exprs '(let [m {:an-ns/k1 1 :an-ns/k2 2 :k3 3 :k4 4}
                         k1 (:an-ns/k1 m)
@@ -265,8 +267,18 @@
                         k4 (get m :k4)]
                     (+ k1 x k3 k4))]
     (let->destructured-let (pr-str in-exprs)))
-  ;; ^^^ WORKS
 
+  (let [in-exprs '(let [client {:name "Super Co."
+                                :location "Philadelphia"
+                                :description "The worldwide leader in plastic tableware."}
+                        {category :category} client]
+                    category)]
+    (let->destructured-let (pr-str in-exprs)))
+
+  (let [in-exprs '(let [m {:k1 1 :k2 2 :k3 3}
+                        {k1 :k1 :as all} m]
+                    (= m all))]
+    (let->destructured-let (pr-str in-exprs)))
 
   )
 

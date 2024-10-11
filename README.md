@@ -88,17 +88,16 @@ See TODO.
 # TODO
 ## Associative destructuring 
 - [X] Parse let and get
-- [X] Bindings, top level keys
-  - [X] Round-trip unqualified key access in bindings
-  - [X] Tests using get and direct map lookups
-  - [X] Round-trip multiple unqualified key access
-  - [X] Tests using get and direct map lookups
-  - [X] Round-trip namespaced key access
-  - [X] Tests
-  - [X] Round-trip multiple namespaced key access
-  - [X] Tests
-  - [X] Namespaced keys with binding X are renamed
-  - [X] Tests
+- [X] Bindings, top level keys & tests
+  - [X] key access in bindings
+  - [X] multiple unqualified key access
+  - [X] namespaced key access
+  - [X] multiple namespaced key access
+  - [X] renamed keys
+  - [X] namespaced keys with binding X are renamed
+  - [X] binding to missing key produces nil
+  - [X] default binding results (`:or`)
+- [ ] :strs and :syms for string and symbol keys respectively.
 - [ ] Bindings, nested keys
   - [ ] Round-trip unqualified key access in bindings
   - [ ] Tests

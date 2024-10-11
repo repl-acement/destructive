@@ -168,3 +168,85 @@
                :init-expr m}
              ;; TODO ... does placement of destructuring in the bindings list matter?
              (-> result :unform :unform-form :bindings last))))))
+
+(deftest destructuring-guide-examples
+  (testing "simple key bindings are destructured into a map"
+    (let [in-bindings '(let [client {:name "Super Co."
+                                     :location "Philadelphia"
+                                     :description "The worldwide leader in plastic tableware."}
+                             the-name (:name client)
+                             the-location (:location client)
+                             the-description (:description client)]
+                         (str the-name " " the-location " - " the-description))
+          result (->> (pr-str in-bindings)
+                      sut/let->destructured-let)]
+      (is (= "Super Co. Philadelphia - The worldwide leader in plastic tableware."
+             (eval (-> result :unform :unformed))))
+      (is (= 2 (count (-> result :unform :unform-form :bindings))))
+      (is (= '{:form [:map-destructure {the-description :description
+                                        the-location :location
+                                        the-name :name}]
+               :init-expr client}
+             (-> result :unform :unform-form :bindings last)))))
+  (testing "Incorrect bindings are nil"
+    (let [in-bindings '(let [client {:name "Super Co."
+                                     :location "Philadelphia"
+                                     :description "The worldwide leader in plastic tableware."}
+                             {category :category} client]
+                         category)
+          result (->> (pr-str in-bindings)
+                      sut/let->destructured-let)]
+      (is (nil? (eval (-> result :unform :unformed))))
+      (is (= 2 (count (-> result :unform :unform-form :bindings))))
+      (is (= '{:form [:map-destructure {category :category}]
+               :init-expr client}
+             (-> result :unform :unform-form :bindings last)))))
+
+  (testing "Default bindings are supported"
+    (let [in-bindings '(let [client {:name "Super Co."
+                                     :location "Philadelphia"
+                                     :description "The worldwide leader in plastic tableware."}
+                             {category :category
+                              :or {category "Category not found"}} client]
+                         category)
+          result (->> (pr-str in-bindings)
+                      sut/let->destructured-let)]
+      (is (= "Category not found" (eval (-> result :unform :unformed))))
+      (is (= 2 (count (-> result :unform :unform-form :bindings))))
+      (is (= '{:form [:map-destructure {:or {category "Category not found"}
+                                        category :category}]
+               :init-expr client}
+             (-> result :unform :unform-form :bindings last)))))
+
+  (testing "Whole map :as X is supported"
+    (let [in-bindings '(let [client {:name "Super Co."
+                                     :location "Philadelphia"
+                                     :description "The worldwide leader in plastic tableware."}
+                             {name :name :as all} client]
+                         (= all client))
+          result (->> (pr-str in-bindings)
+                      sut/let->destructured-let)]
+      (is (true? (eval (-> result :unform :unformed))))
+      (is (= 2 (count (-> result :unform :unform-form :bindings))))
+      (is (= '{:form [:map-destructure {name :name :as all}]
+               :init-expr client}
+             (-> result :unform :unform-form :bindings last)))))
+
+  (testing "Whole map :as X and :or are supported"
+    (let [in-bindings '(let [my-map {:a "A" :b "B" :c 3 :d 4}
+                             {x :x :or {x "Not found"} :as all} my-map]
+                         (and (= x "Not found")
+                              (= all my-map)))
+          result (->> (pr-str in-bindings)
+                      sut/let->destructured-let)]
+      (is (true? (eval (-> result :unform :unformed))))
+      (is (= 2 (count (-> result :unform :unform-form :bindings))))
+      (is (= '{:form [:map-destructure {x :x :or {x "Not found"} :as all}]
+               :init-expr my-map}
+             (-> result :unform :unform-form :bindings last)))))
+
+  )
+
+
+
+
