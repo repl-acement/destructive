@@ -139,8 +139,18 @@ See TODO.
 
 ## References
 
-I found this detailed post from [Yehonathan Sharvit](https://blog.klipse.tech/) especially useful in the understanding of how to manipulate the data that is produced by `conform` and ensure that it stays well-formed for the `unform` function.
+### `conform` and `unform`
+I found this [detailed post](https://blog.klipse.tech/clojure/2019/03/08/spec-custom-defn.html) from [Yehonathan Sharvit](https://blog.klipse.tech/).
 
-https://blog.klipse.tech/clojure/2019/03/08/spec-custom-defn.html
+It was especially useful in understanding how to manipulate the data that is produced by `conform` and ensure that it stays well-formed for the `unform` function.
+
+### Handling namespaced keywords
+
+I was stuck with how qualified keys are emitted. 
+
+Thanks to Lasse Määttä who suggested using [*print-namespace-maps*](https://clojuredocs.org/clojure.core/*print-namespace-maps*) via `#clojure-spec` on the Clojurian Slack
+
+
+
 
 

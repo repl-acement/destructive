@@ -1,6 +1,6 @@
 (ns destructive.destructure-test
   (:require
-    [clojure.test :refer [is deftest testing]]
+    [clojure.test :refer [deftest is testing]]
     [destructive.destructure :as sut]))
 
 (deftest unqualified-keys
@@ -34,6 +34,18 @@
       (is (= 3 (eval (-> result :unform :unformed))))
       (is (= 2 (count (-> result :unform :unform-form :bindings))))
       (is (= '{:form [:map-destructure {:keys [k1 k2]}], :init-expr m}
+             (-> result :unform :unform-form :bindings last)))))
+  (testing "Parses several keys using get and lookup"
+    (let [in-bindings '(let [m {:k1 1 :k2 2 :k3 3}
+                             k1 (get m :k1)
+                             k2 (:k2 m)
+                             k3 (:k3 m)]
+                         (+ k1 k2 k3))
+          result (->> (pr-str in-bindings)
+                      sut/let->destructured-let)]
+      (is (= 6 (eval (-> result :unform :unformed))))
+      (is (= 2 (count (-> result :unform :unform-form :bindings))))
+      (is (= '{:form [:map-destructure {:keys [k1 k2 k3]}], :init-expr m}
              (-> result :unform :unform-form :bindings last)))))
   (testing "Parser does not optimize access to literal maps"
     (let [in-bindings '(let [m {:k1 1 :k2 2 :k3 3}
@@ -82,7 +94,8 @@
                       sut/let->destructured-let)]
       (is (= 2 (eval (-> result :unform :unformed))))
       (is (= 2 (count (-> result :unform :unform-form :bindings))))
-      (is (= '{:form [:map-destructure {:b/keys [k2]}], :init-expr m}
+      (is (= '{:form [:map-destructure {:b/keys [k2]}]
+               :init-expr m}
              (-> result :unform :unform-form :bindings last)))))
   (testing "Parses keys using get and lookup"
     (let [in-bindings '(let [m {:a/k1 1 :b/k2 2 :c/k3 3}
@@ -93,7 +106,8 @@
                       sut/let->destructured-let)]
       (is (= 3 (eval (-> result :unform :unformed))))
       (is (= 2 (count (-> result :unform :unform-form :bindings))))
-      (is (= '{:form [:map-destructure {:a/keys [k1] :b/keys [k2]}], :init-expr m}
+      (is (= '{:form [:map-destructure {:a/keys [k1] :b/keys [k2]}]
+               :init-expr m}
              (-> result :unform :unform-form :bindings last)))))
   (testing "Parser does not optimize access to literal maps"
     (let [in-bindings '(let [m {:a/k1 1 :b/k2 2 :c/k3 3}
@@ -105,7 +119,8 @@
                       sut/let->destructured-let)]
       (is (= 6 (eval (-> result :unform :unformed))))
       (is (= 3 (count (-> result :unform :unform-form :bindings))))
-      (is (= '{:form [:map-destructure {:a/keys [k1] :b/keys [k2]}], :init-expr m}
+      (is (= '{:form [:map-destructure {:a/keys [k1] :b/keys [k2]}]
+               :init-expr m}
              ;; TODO ... does placement of destructuring in the bindings list matter?
              (-> result :unform :unform-form :bindings last)))))
   (testing "Parser does not affect other bindings"
@@ -119,6 +134,37 @@
                       sut/let->destructured-let)]
       (is (= 42 (eval (-> result :unform :unformed))))
       (is (= 5 (count (-> result :unform :unform-form :bindings))))
-      (is (= '{:form [:map-destructure {:a/keys [k1]}], :init-expr m}
+      (is (= '{:form [:map-destructure {:a/keys [k1]}]
+               :init-expr m}
+             ;; TODO ... does placement of destructuring in the bindings list matter?
+             (-> result :unform :unform-form :bindings last))))))
+
+(deftest binding-not-keyname
+  (testing "When a key name is not the same as the binding"
+    (let [in-bindings '(let [m {:an-ns/k1 1 :k2 2}
+                             k1 (:an-ns/k1 m)
+                             x (:k2 m)]
+                         (+ k1 x))
+          result (->> (pr-str in-bindings)
+                      sut/let->destructured-let)]
+      (is (= 3 (eval (-> result :unform :unformed))))
+      (is (= 2 (count (-> result :unform :unform-form :bindings))))
+      (is (= '{:form [:map-destructure {:an-ns/keys [k1]
+                                        x :k2}]
+               :init-expr m}
+             ;; TODO ... does placement of destructuring in the bindings list matter?
+             (-> result :unform :unform-form :bindings last)))))
+  (testing "When a qualified key name is not the same as the binding"
+    (let [in-bindings '(let [m {:an-ns/k1 1 :an-ns/k2 2}
+                             k1 (:an-ns/k1 m)
+                             x (:an-ns/k2 m)]
+                         (+ k1 x))
+          result (->> (pr-str in-bindings)
+                      sut/let->destructured-let)]
+      (is (= 3 (eval (-> result :unform :unformed))))
+      (is (= 2 (count (-> result :unform :unform-form :bindings))))
+      (is (= '{:form [:map-destructure {:an-ns/keys [k1]
+                                        x :an-ns/k2}]
+               :init-expr m}
              ;; TODO ... does placement of destructuring in the bindings list matter?
              (-> result :unform :unform-form :bindings last))))))

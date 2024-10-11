@@ -170,22 +170,25 @@
 
 ;; target => {:an-ns/keys [k1], :keys [k2]}
 
+#_[{:symbol m,
+    :accessor x,
+    :key {:keyword :an-ns/k2, :name "k2", :namespace "an-ns"}}]
+
+;; target => {x :an-ns/k2}
+
+
 (defn keys-destructurings
   [accessor-data]
   (reduce
     (fn [acc {:keys [accessor key]}]
-      (let [{:keys [namespace]} key
+      (let [accessor-name (name accessor)
+            {:keys [namespace name]} key
             access-key (keyword namespace "keys")]
-        (update acc access-key #(-> (conj % accessor) vec))))
+        (if (= accessor-name name)
+          (update acc access-key #(-> (conj % accessor) vec))
+          (merge acc {accessor (:keyword key)}))))
     {}
     accessor-data))
-
-;; TODO: add code to cope with
-#_(let [m {:an-ns/k1 1 :no-ns 2}
-        k1 (:an-ns/k1 m)
-        k2 (:no-ns m)]
-    (+ k1 k2))
-; => where k2 needs to be renamed to no-ns in the exprs when it is destructured
 
 (defn- add-destructurings
   [map-accessors bindings]
@@ -251,11 +254,19 @@
     (let->destructured-let (pr-str in-exprs)))
   ;; ^^^ WORKS
 
+  (let [in-exprs '(let [m {:an-ns/k1 1 :an-ns/k2 2}
+                        x (:an-ns/k2 m)]
+                    (+ k1 x))]
+    (let->destructured-let (pr-str in-exprs)))
+  ;; does not work :(
+  ;; => (let [m {:an-ns/k1 1, :an-ns/k2 2}
+  ;;          {:an-ns/keys [x]} m] (+ k1 x))
+  ;; :an-ns/x does not exist so we need to rename the
+  ;; key to match the binding
+
   )
 
-;; Ensure that qualified keys are properly emitted
-;; ref https://clojuredocs.org/clojure.core/*print-namespace-maps*
-;; ht to Lasse Määttä who suggested it via #clojure-spec on the Clojurian Slack
+;; Properly emit qualified keys
 (defmethod print-method IPersistentMap
   [m, ^Writer w]
   (#'clojure.core/print-meta m w)
