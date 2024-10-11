@@ -17,9 +17,11 @@ When it has a map and some bindings or expressions to access its properties, giv
   - [X] Tests using get and direct map lookups
   - [X] Round-trip multiple unqualified key access
   - [X] Tests using get and direct map lookups
-  - [ ] Round-trip namespaced key access
-  - [ ] Tests
-  - [ ] Round-trip multiple namespaced key access
+  - [X] Round-trip namespaced key access
+  - [X] Tests
+  - [X] Round-trip multiple namespaced key access
+  - [X] Tests
+  - [ ] Namespaced keys with binding X are renamed
   - [ ] Tests
 - [ ] Bindings, nested keys
   - [ ] Round-trip unqualified key access in bindings
