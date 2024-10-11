@@ -88,7 +88,7 @@ See TODO.
 # TODO
 ## Associative destructuring 
 - [X] Parse let and get
-- [ ] Bindings, top level keys
+- [X] Bindings, top level keys
   - [X] Round-trip unqualified key access in bindings
   - [X] Tests using get and direct map lookups
   - [X] Round-trip multiple unqualified key access
@@ -97,8 +97,8 @@ See TODO.
   - [X] Tests
   - [X] Round-trip multiple namespaced key access
   - [X] Tests
-  - [ ] Namespaced keys with binding X are renamed
-  - [ ] Tests
+  - [X] Namespaced keys with binding X are renamed
+  - [X] Tests
 - [ ] Bindings, nested keys
   - [ ] Round-trip unqualified key access in bindings
   - [ ] Tests
