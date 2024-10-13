@@ -136,7 +136,7 @@ See TODO.
 - [ ] Become motivated to do this
 
 
-## References
+## Credits, thanks and references
 
 ### `conform` and `unform`
 I found this [detailed post](https://blog.klipse.tech/clojure/2019/03/08/spec-custom-defn.html) from [Yehonathan Sharvit](https://blog.klipse.tech/).
@@ -149,7 +149,11 @@ I was stuck with how qualified keys are emitted.
 
 Thanks to Lasse Määttä who suggested using [*print-namespace-maps*](https://clojuredocs.org/clojure.core/*print-namespace-maps*) via `#clojure-spec` on the Clojurian Slack
 
+### spec.alpha vs spec2
 
+Thanks to Alex Miller from the core team for suggesting that spec2 is dormant not dead. 
 
+Kinda reminded me of the Monty Python Norwegian parrot sketch, but hopefully we will get a better result.
 
+In the meantime, we'll make the most of what we have, and no pining for the fjords.
 

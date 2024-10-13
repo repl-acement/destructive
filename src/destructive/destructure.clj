@@ -31,7 +31,9 @@
   (s/cat
     :name (s/and symbol? #(= 'get %))
     :map ::map-value
-    :key keyword?
+    :key (s/or :keyword keyword?
+               :string string?
+               :symbol symbol?)
     :default (s/? any?)))
 
 (s/def ::map-lookup
@@ -278,6 +280,26 @@
   (let [in-exprs '(let [m {:k1 1 :k2 2 :k3 3}
                         {k1 :k1 :as all} m]
                     (= m all))]
+    (let->destructured-let (pr-str in-exprs)))
+
+  #_(let [expr '(let [string-keys {"first-name" "Joe"
+                                   "last-name" "Smith"}
+                      {:strs [first-name]} string-keys]
+                  first-name)]
+      (s/conform ::let expr))
+  #_{:name let,
+     :bindings [{:form [:local-symbol string-keys],
+                 :init-expr {"first-name" "Joe", "last-name" "Smith"}}
+                {:form [:map-destructure {:strs [first-name]}], :init-expr string-keys}],
+     :exprs first-name}
+  (let [in-exprs '(let [string-keys {"first-name" "Joe"
+                                     "last-name" "Smith"}]
+                    (get string-keys "first-name"))]
+    (let->destructured-let (pr-str in-exprs)))
+
+  #_(let [in-exprs '(let [symbol-keys {'first-name "Jane"
+                                     'last-name "Doe"}]
+                    (get symbol-keys 'first-name))]
     (let->destructured-let (pr-str in-exprs)))
 
   )

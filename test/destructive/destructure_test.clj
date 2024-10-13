@@ -250,7 +250,7 @@
   ; In all of these cases the vector contains symbols which are the local binding names.
   ;(def string-keys {"first-name" "Joe" "last-name" "Smith"})
 
-  (testing "Whole map :as X and :or are supported"
+  (testing ":strs is used for access to string keys (JSON anyone?)"
     (let [in-bindings '(let [string-keys {"first-name" "Joe"
                                           "last-name" "Smith"}]
                          (get string-keys "first-name"))
@@ -262,10 +262,10 @@
                :init-expr my-map}
              (-> result :unform :unform-form :bindings last)))))
 
-  (testing "Whole map :as X and :or are supported"
-    (let [in-bindings '(let [string-keys {'first-name "Jane"
+  (testing ":syms is used for access to symbol keys (parsers anyone?)"
+    (let [in-bindings '(let [symbol-keys {'first-name "Jane"
                                           'last-name "Doe"}]
-                         (get string-keys 'first-name))
+                         (get symbol-keys 'first-name))
           result (->> (pr-str in-bindings)
                       sut/let->destructured-let)]
       (is (= "Jane" (eval (-> result :unform :unformed))))
