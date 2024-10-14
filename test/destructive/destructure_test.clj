@@ -245,11 +245,6 @@
                :init-expr my-map}
              (-> result :unform :unform-form :bindings last)))))
 
-  ; The :keys key is for associative values with keyword keys,
-  ; but there are also :strs and :syms for string and symbol keys respectively.
-  ; In all of these cases the vector contains symbols which are the local binding names.
-  ;(def string-keys {"first-name" "Joe" "last-name" "Smith"})
-
   (testing ":strs is used for access to string keys (JSON anyone?)"
     (let [in-bindings '(let [string-keys {"first-name" "Joe"
                                           "last-name" "Smith"}
@@ -273,6 +268,19 @@
       (is (= "Jane" (eval (-> result :unform :unformed))))
       (is (= 2 (count (-> result :unform :unform-form :bindings))))
       (is (= '{:form [:map-destructure {:syms [first-name]}]
+               :init-expr symbol-keys}
+             (-> result :unform :unform-form :bindings last)))))
+
+  (testing ":syms can also access namespaced symbol keys (parsers anyone?)"
+    (let [in-bindings '(let [symbol-keys {'an-ns/first-name "Jane"
+                                          'an-ns/last-name "Doe"}
+                             first-name (get symbol-keys 'an-ns/first-name)]
+                         first-name)
+          result (->> (pr-str in-bindings)
+                      sut/let->destructured-let)]
+      (is (= "Jane" (eval (-> result :unform :unformed))))
+      (is (= 2 (count (-> result :unform :unform-form :bindings))))
+      (is (= '{:form [:map-destructure {:an-ns/syms [first-name]}]
                :init-expr symbol-keys}
              (-> result :unform :unform-form :bindings last)))))
 

@@ -34,7 +34,7 @@
     :key (s/or :keyword keyword?
                :string string?
                :symbol (s/or :sym symbol?
-                             :quoted-sym list?))
+                             :quoted-sym (s/coll-of symbol? :distinct true :count 2)))
     :default (s/? any?)))
 
 (s/def ::map-lookup
@@ -132,6 +132,26 @@
     (let [{:keys [map]} sym-data]
       (some? (get syms (:ref map))))))
 
+
+(defn- keyword-metadata
+  [metadata key-value]
+  (cond-> (merge metadata {:type :keyword
+                           :name (name key-value)})
+          (qualified-keyword? key-value)
+          (assoc :namespace (namespace key-value))))
+
+(defn- symbol-metadata
+  [metadata key-value]
+  (let [[sym-type sym-value] key-value]
+    (cond-> (merge metadata
+                   {:type :symbol
+                    :name (if (= :quoted-sym sym-type)
+                            (name (eval sym-value))
+                            (name sym-value))})
+            (and (= :quoted-sym sym-type)
+                 (qualified-symbol? (eval sym-value)))
+            (assoc :namespace (namespace (eval sym-value))))))
+
 (defn- bindings-symbols->map-accessors
   [bindings-symbols]
   (->> bindings-symbols
@@ -143,19 +163,10 @@
                     :accessor k
                     :key key-value
                     :key-metadata (condp = key-type
-                                    :string (merge metadata
-                                                   {:type :string
-                                                    :name key-value})
-                                    :keyword (cond-> (merge metadata {:type :keyword
-                                                                      :name (name key-value)})
-                                                     (qualified-keyword? key-value)
-                                                     (assoc :namespace (namespace key-value)))
-                                    :symbol (merge metadata
-                                                   {:type :symbol
-                                                    :name (let [[sym-type sym-value] key-value]
-                                                            (if (= :quoted-sym sym-type)
-                                                              (name (eval sym-value))
-                                                              (name sym-value)))}))}))))
+                                    :string (merge metadata {:type :string
+                                                             :name key-value})
+                                    :keyword (keyword-metadata metadata key-value)
+                                    :symbol (symbol-metadata metadata key-value))}))))
        (group-by :symbol)))
 
 (defn- ->symbol-accessors
@@ -206,13 +217,13 @@
 (defn keys-destructurings
   [accessor-data]
   (reduce
-    (fn [acc {:keys [accessor key key-metadata] :as x}]
+    (fn [acc {:keys [accessor key key-metadata]}]
       (let [accessor-name (name accessor)
             {:keys [namespace name type]} key-metadata
             access-key (condp = type
                          :keyword (keyword namespace "keys")
                          :string :strs
-                         :symbol :syms)]
+                         :symbol (keyword namespace "syms"))]
         (if (= accessor-name name)
           (update acc access-key #(-> (conj % accessor) vec))
           (merge acc {accessor key}))))
@@ -269,55 +280,11 @@
 
 (comment
 
-  (let [in-exprs '(let [m {:k1 1 :k2 2 :k3 3}
-                        k1 (:k1 m)
-                        k2 (:k2 m)
-                        k3 (get m :k3)]
-                    (+ k1 k2 k3))]
-    (let->destructured-let (pr-str in-exprs)))
-
-  (let [in-exprs '(let [m {:an-ns/k1 1 :k2 2 :k3 3}
-                        k1 (:an-ns/k1 m)
-                        k2 (:k2 m)
-                        k3 (get m :k3)]
-                    (+ k1 k2 k3))]
-    (let->destructured-let (pr-str in-exprs)))
-
-  (let [in-exprs '(let [m {:an-ns/k1 1 :an-ns/k2 2 :k3 3 :k4 4}
-                        k1 (:an-ns/k1 m)
-                        x (:an-ns/k2 m)
-                        k3 (:k3 m)
-                        k4 (get m :k4)]
-                    (+ k1 x k3 k4))]
-    (let->destructured-let (pr-str in-exprs)))
-
-  (let [in-exprs '(let [client {:name "Super Co."
-                                :location "Philadelphia"
-                                :description "The worldwide leader in plastic tableware."}
-                        {category :category} client]
-                    category)]
-    (let->destructured-let (pr-str in-exprs)))
-
-  (let [in-exprs '(let [m {:k1 1 :k2 2 :k3 3}
-                        {k1 :k1 :as all} m]
-                    (= m all))]
-    (let->destructured-let (pr-str in-exprs)))
-
-  (let [in-exprs '(let [string-keys {"first-name" "Joe"
-                                     "last-name" "Smith"}
-                        first-name (get string-keys "first-name")]
+  (let [in-exprs '(let [symbol-keys {'a/first-name "Jane"
+                                     'a/last-name "Doe"}
+                        first-name (get symbol-keys 'a/first-name)]
                     first-name)]
     (let->destructured-let (pr-str in-exprs)))
-
-  (let [in-exprs '(let [symbol-keys {'first-name "Jane"
-                                     'last-name "Doe"}
-                        first-name (get symbol-keys 'first-name)]
-                    first-name)]
-    (let->destructured-let (pr-str in-exprs)))
-
-  ; The :keys key is for associative values with keyword keys, but there are also
-  ; :strs and :syms for string and symbol keys respectively. In all of these cases
-  ; the vector contains symbols which are the local binding names.
 
   )
 
