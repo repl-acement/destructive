@@ -97,7 +97,7 @@ See TODO.
   - [X] namespaced keys with binding X are renamed
   - [X] binding to missing key produces nil
   - [X] default binding results (`:or`)
-- [ ] :strs and :syms for string and symbol keys respectively.
+- [X] :strs and :syms for string and symbol keys respectively.
 - [ ] Bindings, nested keys
   - [ ] Round-trip unqualified key access in bindings
   - [ ] Tests

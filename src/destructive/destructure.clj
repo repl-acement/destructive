@@ -33,12 +33,15 @@
     :map ::map-value
     :key (s/or :keyword keyword?
                :string string?
-               :symbol symbol?)
+               :symbol (s/or :sym symbol?
+                             :quoted-sym list?))
     :default (s/? any?)))
 
 (s/def ::map-lookup
   (s/cat
-    :key keyword?
+    :key (s/or :keyword keyword?
+               :string string?
+               :symbol symbol?)
     :map ::map-value))
 
 (s/def ::form
@@ -134,16 +137,31 @@
   (->> bindings-symbols
        (keep (fn [[k {:keys [map key] :as v}]]
                (when (map-accessor? bindings-symbols v)
-                 {:symbol (:ref map)
-                  :accessor k
-                  :key (keyword-parts key)})))
+                 (let [[key-type key-value] key
+                       metadata {:value key-value}]
+                   {:symbol (:ref map)
+                    :accessor k
+                    :key key-value
+                    :key-metadata (condp = key-type
+                                    :string (merge metadata
+                                                   {:type :string
+                                                    :name key-value})
+                                    :keyword (cond-> (merge metadata {:type :keyword
+                                                                      :name (name key-value)})
+                                                     (qualified-keyword? key-value)
+                                                     (assoc :namespace (namespace key-value)))
+                                    :symbol (merge metadata
+                                                   {:type :symbol
+                                                    :name (let [[sym-type sym-value] key-value]
+                                                            (if (= :quoted-sym sym-type)
+                                                              (name (eval sym-value))
+                                                              (name sym-value)))}))}))))
        (group-by :symbol)))
 
 (defn- ->symbol-accessors
   [{{:keys [bindings-symbols]} :parse :as data}]
   (let [symbol-accessors (bindings-symbols->map-accessors bindings-symbols)]
-    (assoc data
-      :analysis {:bindings {:map-accessors symbol-accessors}})))
+    (assoc data :analysis {:bindings {:map-accessors symbol-accessors}})))
 
 (defn- drop-accessors
   "Per key set in the access map, remove the redundant
@@ -188,13 +206,16 @@
 (defn keys-destructurings
   [accessor-data]
   (reduce
-    (fn [acc {:keys [accessor key]}]
+    (fn [acc {:keys [accessor key key-metadata] :as x}]
       (let [accessor-name (name accessor)
-            {:keys [namespace name]} key
-            access-key (keyword namespace "keys")]
+            {:keys [namespace name type]} key-metadata
+            access-key (condp = type
+                         :keyword (keyword namespace "keys")
+                         :string :strs
+                         :symbol :syms)]
         (if (= accessor-name name)
           (update acc access-key #(-> (conj % accessor) vec))
-          (merge acc {accessor (:keyword key)}))))
+          (merge acc {accessor key}))))
     {}
     accessor-data))
 
@@ -282,25 +303,21 @@
                     (= m all))]
     (let->destructured-let (pr-str in-exprs)))
 
-  #_(let [expr '(let [string-keys {"first-name" "Joe"
-                                   "last-name" "Smith"}
-                      {:strs [first-name]} string-keys]
-                  first-name)]
-      (s/conform ::let expr))
-  #_{:name let,
-     :bindings [{:form [:local-symbol string-keys],
-                 :init-expr {"first-name" "Joe", "last-name" "Smith"}}
-                {:form [:map-destructure {:strs [first-name]}], :init-expr string-keys}],
-     :exprs first-name}
   (let [in-exprs '(let [string-keys {"first-name" "Joe"
-                                     "last-name" "Smith"}]
-                    (get string-keys "first-name"))]
+                                     "last-name" "Smith"}
+                        first-name (get string-keys "first-name")]
+                    first-name)]
     (let->destructured-let (pr-str in-exprs)))
 
-  #_(let [in-exprs '(let [symbol-keys {'first-name "Jane"
-                                     'last-name "Doe"}]
-                    (get symbol-keys 'first-name))]
+  (let [in-exprs '(let [symbol-keys {'first-name "Jane"
+                                     'last-name "Doe"}
+                        first-name (get symbol-keys 'first-name)]
+                    first-name)]
     (let->destructured-let (pr-str in-exprs)))
+
+  ; The :keys key is for associative values with keyword keys, but there are also
+  ; :strs and :syms for string and symbol keys respectively. In all of these cases
+  ; the vector contains symbols which are the local binding names.
 
   )
 

@@ -252,26 +252,28 @@
 
   (testing ":strs is used for access to string keys (JSON anyone?)"
     (let [in-bindings '(let [string-keys {"first-name" "Joe"
-                                          "last-name" "Smith"}]
-                         (get string-keys "first-name"))
+                                          "last-name" "Smith"}
+                             first-name (get string-keys "first-name")]
+                         first-name)
           result (->> (pr-str in-bindings)
                       sut/let->destructured-let)]
       (is (= "Joe" (eval (-> result :unform :unformed))))
       (is (= 2 (count (-> result :unform :unform-form :bindings))))
-      (is (= '{:form [:map-destructure {x :x :or {x "Not found"} :as all}]
-               :init-expr my-map}
+      (is (= '{:form [:map-destructure {:strs [first-name]}]
+               :init-expr string-keys}
              (-> result :unform :unform-form :bindings last)))))
 
   (testing ":syms is used for access to symbol keys (parsers anyone?)"
     (let [in-bindings '(let [symbol-keys {'first-name "Jane"
-                                          'last-name "Doe"}]
-                         (get symbol-keys 'first-name))
+                                          'last-name "Doe"}
+                             first-name (get symbol-keys 'first-name)]
+                         first-name)
           result (->> (pr-str in-bindings)
                       sut/let->destructured-let)]
       (is (= "Jane" (eval (-> result :unform :unformed))))
       (is (= 2 (count (-> result :unform :unform-form :bindings))))
-      (is (= '{:form [:map-destructure {x :x :or {x "Not found"} :as all}]
-               :init-expr my-map}
+      (is (= '{:form [:map-destructure {:syms [first-name]}]
+               :init-expr symbol-keys}
              (-> result :unform :unform-form :bindings last)))))
 
   )
