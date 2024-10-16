@@ -2,6 +2,7 @@
   (:require
     [clojure.core.specs.alpha :as specs]
     [clojure.spec.alpha :as s]
+    [clojure.spec.gen.alpha :as gen]
     [destructive.form-reader :as form-reader])
   (:import (clojure.lang IPersistentMap)
            (java.io Writer)))
@@ -26,7 +27,16 @@
                      ::specs/bindings)
     :exprs (s/? any?)))
 
-;; A spec for get that works only on maps, with keywords as keys
+(s/def ::quoted-sym
+  (s/with-gen
+    (s/coll-of symbol? :kind list? :distinct true :count 2 :into ())
+    #(gen/fmap (fn [sym-name]
+                 (list (symbol "quote") (symbol sym-name)))
+               (gen/such-that
+                 (partial not= "") (gen/string-alphanumeric)))))
+
+;; A spec for `get` that works only on maps, with keywords, strings or symbols as keys
+;; It is only applicable for conforming data from :init-expr (the right hand side) of :bindings
 (s/def ::get-k-from-m
   (s/cat
     :name (s/and symbol? #(= 'get %))
@@ -34,7 +44,7 @@
     :key (s/or :keyword keyword?
                :string string?
                :symbol (s/or :sym symbol?
-                             :quoted-sym (s/coll-of symbol? :distinct true :count 2)))
+                             :quoted-sym ::quoted-sym))
     :default (s/? any?)))
 
 (s/def ::map-lookup
@@ -50,11 +60,6 @@
         :lookup ::map-lookup
         :literal-map map?
         :unknown any?))
-
-(defn keyword-parts [k]
-  (cond-> {:keyword k
-           :name (name k)}
-          (qualified-keyword? k) (assoc :namespace (namespace k))))
 
 (defn- lookup-symbols
   "Read the data and resolve any symbols.
@@ -179,8 +184,6 @@
   accessor bindings eg drop the binding for [:local-symbol x]
   when x is in the key set of the access map"
   [map-accessors bindings]
-  ;; TODO ... this seems ugly, let's refactor!
-  ;;
   (if (empty? map-accessors)
     bindings
     (->> map-accessors
@@ -192,27 +195,6 @@
                            bindings))))
          flatten
          vec)))
-
-#_[{:symbol m, :accessor k1, :key {:keyword :k1, :name "k1"}}
-   {:symbol m, :accessor k2, :key {:keyword :k2, :name "k2"}}]
-
-;; target => {:keys [k1 k2]}
-
-#_[{:symbol m,
-    :accessor k1,
-    :key {:keyword :an-ns/k1, :name "k1", :namespace "an-ns"}}
-   {:symbol m,
-    :accessor k2,
-    :key {:keyword :k2, :name "k2"}}]
-
-;; target => {:an-ns/keys [k1], :keys [k2]}
-
-#_[{:symbol m,
-    :accessor x,
-    :key {:keyword :an-ns/k2, :name "k2", :namespace "an-ns"}}]
-
-;; target => {x :an-ns/k2}
-
 
 (defn keys-destructurings
   [accessor-data]
