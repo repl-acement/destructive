@@ -169,6 +169,18 @@
              ;; TODO ... does placement of destructuring in the bindings list matter?
              (-> result :unform :unform-form :bindings last))))))
 
+(deftest nested-keys
+  (testing "An unqualified key is accessed via get-in"
+    (let [in-bindings '(let [m {:k {:kk 1}}
+                             kk (get-in m [:k :kk])]
+                         kk)
+          result (->> (pr-str in-bindings)
+                      sut/let->destructured-let)]
+      (is (= 1 (eval (-> result :unform :unformed))))
+      (is (= 2 (count (-> result :unform :unform-form :bindings))))
+      (is (= '{:form [:map-destructure {{:keys [kk]} :k}], :init-expr m}
+             (-> result :unform :unform-form :bindings last))))))
+
 (deftest destructuring-guide-examples
   (testing "simple key bindings are destructured into a map"
     (let [in-bindings '(let [client {:name "Super Co."

@@ -35,16 +35,25 @@
                (gen/such-that
                  (partial not= "") (gen/string-alphanumeric)))))
 
+(s/def ::key-from-map
+  (s/or :keyword keyword?
+        :string string?
+        :symbol (s/or :sym symbol?
+                      :quoted-sym ::quoted-sym)))
 ;; A spec for `get` that works only on maps, with keywords, strings or symbols as keys
 ;; It is only applicable for conforming data from :init-expr (the right hand side) of :bindings
 (s/def ::get-k-from-m
   (s/cat
     :name (s/and symbol? #(= 'get %))
     :map ::map-value
-    :key (s/or :keyword keyword?
-               :string string?
-               :symbol (s/or :sym symbol?
-                             :quoted-sym ::quoted-sym))
+    :key ::key-from-map
+    :default (s/? any?)))
+
+(s/def ::get-in-k-from-m
+  (s/cat
+    :name (s/and symbol? #(= 'get-in %))
+    :map ::map-value
+    :keys (s/coll-of ::key-from-map :kind vector? :into [])
     :default (s/? any?)))
 
 (s/def ::map-lookup
@@ -57,13 +66,14 @@
 (s/def ::form
   (s/or :let ::let
         :get ::get-k-from-m
+        :get-in ::get-in-k-from-m
         :lookup ::map-lookup
         :literal-map map?
         :unknown any?))
 
-(defn- lookup-symbols
-  "Read the data and resolve any symbols.
-  Return the updated map of symbols."
+(defn- lookup-symbol
+  "Read the data and attempt to resolve symbol-name.
+  Returns the updated map of symbols."
   [symbol-name parsed-data]
   (let [k (keyword (name symbol-name))
         v {:name (name symbol-name)}
@@ -85,7 +95,7 @@
         (= :literal-map form-name)
         (assoc parsed-data k {:literal expr-form})
 
-        (contains? #{:get :lookup} form-name)
+        (contains? #{:get :get-in :lookup} form-name)
         (let [{:keys [key map]} conformed-form]
           (assoc parsed-data k {:form-name form-name
                                 :parsed-form conformed-form
@@ -105,6 +115,7 @@
                          :form expr-form}))))))
 
 (defn- ->binding-symbols
+  "Produce a map for each binding symbol to its fully parsed init-expr."
   [{:keys [bindings]} init-expr-spec]
   (reduce
     (fn [symbols {:keys [form init-expr]}]
@@ -112,7 +123,7 @@
         (if (not= :local-symbol form-type)
           symbols
           (->> symbols
-               (lookup-symbols form-expr)
+               (lookup-symbol form-expr)
                (parse-init-expr form-expr init-expr-spec init-expr)))))
     {}
     bindings))
@@ -125,17 +136,21 @@
     (if (= ::s/invalid conformant-form)
       (throw (ex-info "Parse failure" (assoc data :error :unsupported-form)))
       (let [[form-name parsed-form] conformant-form
-            ;; TODO should this spec be the same as the incoming spec? Probably!
             bindings-symbols (->binding-symbols parsed-form spec)]
         (assoc data :parse {:form-name form-name
                             :parsed-form parsed-form
                             :bindings-symbols bindings-symbols})))))
 
 (defn- map-accessor?
-  [syms {:keys [form-name] :as sym-data}]
-  (when (contains? #{:get :lookup} form-name)
+  "This assumes that we can actually run get or get-in on the
+  map.
+  TODO - consider whether just having X as a map? is good enough"
+  [bindings-syms {:keys [form-name] :as sym-data}]
+  (when (contains? #{:get :get-in :lookup} form-name)
     (let [{:keys [map]} sym-data]
-      (some? (get syms (:ref map))))))
+      (condp = form-name
+        :get-in (some? (get-in bindings-syms (:keys sym-data)))
+        (some? (get bindings-syms (:ref map)))))))
 
 
 (defn- keyword-metadata
@@ -157,21 +172,30 @@
                  (qualified-symbol? (eval sym-value)))
             (assoc :namespace (namespace (eval sym-value))))))
 
+(defn- key->map-accessor
+  [k {:keys [map key]}]
+  (let [[key-type key-value] key
+        metadata {:value key-value}]
+    {:symbol (:ref map)
+     :accessor k
+     :key key-value
+     :key-metadata (condp = key-type
+                     :string (merge metadata {:type :string
+                                              :name key-value})
+                     :keyword (keyword-metadata metadata key-value)
+                     :symbol (symbol-metadata metadata key-value)
+                     (throw (ex-info "Unsupported key type" {:key-type key-type})))}))
+
 (defn- bindings-symbols->map-accessors
   [bindings-symbols]
   (->> bindings-symbols
-       (keep (fn [[k {:keys [map key] :as v}]]
+       (keep (fn [[k {:keys [key keys] :as v}]]
                (when (map-accessor? bindings-symbols v)
-                 (let [[key-type key-value] key
-                       metadata {:value key-value}]
-                   {:symbol (:ref map)
-                    :accessor k
-                    :key key-value
-                    :key-metadata (condp = key-type
-                                    :string (merge metadata {:type :string
-                                                             :name key-value})
-                                    :keyword (keyword-metadata metadata key-value)
-                                    :symbol (symbol-metadata metadata key-value))}))))
+                 (cond
+                   ;; TODO .... as above per key
+                   ;; ... extract out the bits that are common to both cases!!
+                   keys ()
+                   key (key->map-accessor k v)))))
        (group-by :symbol)))
 
 (defn- ->symbol-accessors
@@ -262,10 +286,9 @@
 
 (comment
 
-  (let [in-exprs '(let [symbol-keys {'a/first-name "Jane"
-                                     'a/last-name "Doe"}
-                        first-name (get symbol-keys 'a/first-name)]
-                    first-name)]
+  (let [in-exprs '(let [m {:k {:kk 1}}
+                        kk (get m :k)]
+                    kk)]
     (let->destructured-let (pr-str in-exprs)))
 
   )

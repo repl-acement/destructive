@@ -88,7 +88,7 @@ See TODO.
 # TODO
 ## Associative destructuring 
 - [X] Parse let and get
-- [X] Bindings, top level keys & tests
+- [X] Bindings, top level keys
   - [X] key access in bindings
   - [X] multiple unqualified key access
   - [X] namespaced key access
@@ -97,41 +97,28 @@ See TODO.
   - [X] namespaced keys with binding X are renamed
   - [X] binding to missing key produces nil
   - [X] default binding results (`:or`)
-- [X] :strs and :syms for string and symbol keys respectively.
+- [X] :strs and :syms for string and symbol keys respectively & tests
+  - [X] namespaced :syms
 - [ ] Bindings, nested keys
   - [ ] Round-trip unqualified key access in bindings
-  - [ ] Tests
   - [ ] Round-trip multiple unqualified key access
-  - [ ] Tests
   - [ ] Round-trip namespaced key access
-  - [ ] Tests
   - [ ] Round-trip multiple namespaced key access
-  - [ ] Tests
-- [ ] Bindings, mix of top level and nested keys
-  - [ ] Tests
+- [ ] Bindings, mix of top level and nested keys & tests
 - [ ] Expressions, top level keys
-  - [ ] Round-trip unqualified key access in bindings
-  - [ ] Tests
+  - [ ] Round-trip unqualified key access
   - [ ] Round-trip multiple unqualified key access
-  - [ ] Tests
   - [ ] Round-trip namespaced key access
-  - [ ] Tests
   - [ ] Round-trip multiple namespaced key access
-  - [ ] Tests
 - [ ] Expressions, nested keys
-  - [ ] Round-trip unqualified key access in bindings
-  - [ ] Tests
+  - [ ] Round-trip unqualified key access
   - [ ] Round-trip multiple unqualified key access
-  - [ ] Tests
   - [ ] Round-trip namespaced key access
-  - [ ] Tests
   - [ ] Round-trip multiple namespaced key access
-  - [ ] Tests
 - [ ] Expressions, mix of top level and nested keys
-  - [ ] Tests
 - [ ] Expressions and bindings
-  - [ ] Tests
-- [ ] Linter checks
+- [ ] Linter checks on unformed results
+
 ## Sequential destructuring
 - [ ] Become motivated to do this
 
