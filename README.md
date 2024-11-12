@@ -99,8 +99,8 @@ See TODO.
   - [X] default binding results (`:or`)
 - [X] :strs and :syms for string and symbol keys respectively & tests
   - [X] namespaced :syms
-- [ ] Bindings, nested keys
-  - [ ] Round-trip unqualified key access in bindings
+- [X] Bindings, nested keys
+  - [X] Round-trip unqualified key access in bindings
   - [ ] Round-trip multiple unqualified key access
   - [ ] Round-trip namespaced key access
   - [ ] Round-trip multiple namespaced key access
@@ -140,7 +140,7 @@ Thanks to Lasse Määttä who suggested using [*print-namespace-maps*](https://c
 
 Thanks to Alex Miller from the core team for suggesting that spec2 is dormant not dead. 
 
-Kinda reminded me of the Monty Python Norwegian parrot sketch, but hopefully we will get a better result.
+Kinda reminded me of the Monty Python Norwegian parrot sketch, and hopefully we will get a better result.
 
-In the meantime, we'll make the most of what we have, and no pining for the fjords.
+In the meantime, we'll make the most of what we have, and won't be pining for the fjords.
 

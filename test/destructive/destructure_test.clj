@@ -283,7 +283,7 @@
                :init-expr symbol-keys}
              (-> result :unform :unform-form :bindings last)))))
 
-  (testing ":syms can also access namespaced symbol keys (parsers anyone?)"
+  (testing ":syms can be used to access namespaced symbols"
     (let [in-bindings '(let [symbol-keys {'an-ns/first-name "Jane"
                                           'an-ns/last-name "Doe"}
                              first-name (get symbol-keys 'an-ns/first-name)]

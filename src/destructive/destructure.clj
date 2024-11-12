@@ -40,6 +40,7 @@
         :string string?
         :symbol (s/or :sym symbol?
                       :quoted-sym ::quoted-sym)))
+
 ;; A spec for `get` that works only on maps, with keywords, strings or symbols as keys
 ;; It is only applicable for conforming data from :init-expr (the right hand side) of :bindings
 (s/def ::get-k-from-m
@@ -96,9 +97,10 @@
         (assoc parsed-data k {:literal expr-form})
 
         (contains? #{:get :get-in :lookup} form-name)
-        (let [{:keys [key map]} conformed-form]
+        (let [{:keys [key keys map]} conformed-form]
           (assoc parsed-data k {:form-name form-name
                                 :parsed-form conformed-form
+                                :keys keys
                                 :key key
                                 :map (let [[map-type v] map]
                                        (condp = map-type
@@ -128,7 +130,7 @@
     {}
     bindings))
 
-(defn- parse
+(defn- ->parse
   "Add a :parse key to the data map with data from this phase.
   Throws when `form` does not conform to `spec`"
   [{{:keys [edn-form spec]} :inputs :as data}]
@@ -141,61 +143,96 @@
                             :parsed-form parsed-form
                             :bindings-symbols bindings-symbols})))))
 
+(defn- keys->access-path
+  [keys]
+  (reduce (fn [result [_ key-name]]
+            (conj result key-name))
+          []
+          keys))
+
+;TODO - code for having X as a map? cos that will need to be good
+;enough where we don't have a literal map in the let bindings.
 (defn- map-accessor?
-  "This assumes that we can actually run get or get-in on the
-  map.
-  TODO - consider whether just having X as a map? is good enough"
+  "Assumes that the map is declared in the bindings"
   [bindings-syms {:keys [form-name] :as sym-data}]
   (when (contains? #{:get :get-in :lookup} form-name)
-    (let [{:keys [map]} sym-data]
-      (condp = form-name
-        :get-in (some? (get-in bindings-syms (:keys sym-data)))
-        (some? (get bindings-syms (:ref map)))))))
+    (let [{{:keys [ref]} :map} sym-data]
+      (some? (get bindings-syms ref)))))
 
+
+(defn- keyword-meta
+  [key-name]
+  (cond-> {:type :keyword
+           :name (name key-name)}
+          (qualified-keyword? key-name)
+          (assoc :namespace (namespace key-name))))
 
 (defn- keyword-metadata
-  [metadata key-value]
-  (cond-> (merge metadata {:type :keyword
-                           :name (name key-value)})
-          (qualified-keyword? key-value)
-          (assoc :namespace (namespace key-value))))
+  [metadata key-name]
+  (merge metadata (keyword-meta key-name)))
+
+(defn- symbol-meta
+  [[sym-type sym-name]]
+  (cond-> {:type :symbol
+           :name (if (= :quoted-sym sym-type)
+                   (name (eval sym-name))
+                   (name sym-name))}
+          (and (= :quoted-sym sym-type)
+               (qualified-symbol? (eval sym-name)))
+          (assoc :namespace (namespace (eval sym-name)))))
 
 (defn- symbol-metadata
-  [metadata key-value]
-  (let [[sym-type sym-value] key-value]
-    (cond-> (merge metadata
-                   {:type :symbol
-                    :name (if (= :quoted-sym sym-type)
-                            (name (eval sym-value))
-                            (name sym-value))})
-            (and (= :quoted-sym sym-type)
-                 (qualified-symbol? (eval sym-value)))
-            (assoc :namespace (namespace (eval sym-value))))))
+  [metadata key-name]
+  (merge metadata (symbol-meta key-name)))
+
+(defn- ->keys-metadata
+  [[key-type key-name]]
+  (condp = key-type
+    :string {:type :string
+             :name key-name}
+    :keyword (keyword-meta key-name)
+    :symbol (symbol-meta key-name)
+    (throw (ex-info "Unsupported key type" {:key-type key-type}))))
+
+(defn- keys->map-accessor
+  [k {:keys [map keys]}]
+  (let [access-path (reduce (fn [result [_ key-name]]
+                              (conj result key-name))
+                            []
+                            keys)
+        keys-metadata (mapv (fn [[_key-type key-name :as a-key]]
+                              (merge {:value key-name}
+                                     (->keys-metadata a-key)))
+                            keys)]
+    {:symbol (:ref map)
+     :access-path access-path
+     :accessor k
+     :keys keys
+     :keys-metadata keys-metadata}))
 
 (defn- key->map-accessor
   [k {:keys [map key]}]
-  (let [[key-type key-value] key
-        metadata {:value key-value}]
+  (let [[key-type key-name] key
+        metadata {:value key-name}]
     {:symbol (:ref map)
      :accessor k
-     :key key-value
+     :key key-name
      :key-metadata (condp = key-type
                      :string (merge metadata {:type :string
-                                              :name key-value})
-                     :keyword (keyword-metadata metadata key-value)
-                     :symbol (symbol-metadata metadata key-value)
+                                              :name key-name})
+                     :keyword (keyword-metadata metadata key-name)
+                     :symbol (symbol-metadata metadata key-name)
                      (throw (ex-info "Unsupported key type" {:key-type key-type})))}))
 
 (defn- bindings-symbols->map-accessors
   [bindings-symbols]
   (->> bindings-symbols
        (keep (fn [[k {:keys [key keys] :as v}]]
-               (when (map-accessor? bindings-symbols v)
-                 (cond
-                   ;; TODO .... as above per key
-                   ;; ... extract out the bits that are common to both cases!!
-                   keys ()
-                   key (key->map-accessor k v)))))
+               (let [accessor? (map-accessor? bindings-symbols v)]
+                 (when accessor?
+                   (cond
+                     keys (keys->map-accessor k v)
+                     key (key->map-accessor k v))))))
        (group-by :symbol)))
 
 (defn- ->symbol-accessors
@@ -220,19 +257,50 @@
          flatten
          vec)))
 
+(defn recursive-keys-destructurings
+  "Given a map where the keys `highest` is the symbol and the access-path is
+  `[:ryan :hi-scores :all-time]`, transform this example binding:
+   highest (get-in multiplayer-game-state [:ryan :hi-scores :all-time])
+   to this destructuring binding:
+   {{{highest :all-time} :hi-scores} :ryan} multiplayer-game-state"
+  [access-key {:keys [accessor access-path]}]
+  (loop [result {}
+         m (reverse access-path)]
+    (let [next-kw (first m)]
+      (if-not next-kw
+        result
+        (let [kw-name (name next-kw)]
+          (recur (cond
+                   (and (empty? result)
+                        (= (name accessor) kw-name)) (hash-map access-key [accessor])
+                   (empty? result) (hash-map accessor next-kw)
+                   :else (hash-map result next-kw))
+                 (rest m)))))))
+
 (defn keys-destructurings
   [accessor-data]
   (reduce
-    (fn [acc {:keys [accessor key key-metadata]}]
-      (let [accessor-name (name accessor)
-            {:keys [namespace name type]} key-metadata
-            access-key (condp = type
-                         :keyword (keyword namespace "keys")
-                         :string :strs
-                         :symbol (keyword namespace "syms"))]
-        (if (= accessor-name name)
-          (update acc access-key #(-> (conj % accessor) vec))
-          (merge acc {accessor key}))))
+    (fn [acc {:keys [accessor key keys key-metadata keys-metadata] :as v}]
+      (let [accessor-name (name accessor)]
+        (cond
+          keys
+          ;; need the key type of the last key from the list
+          (let [{:keys [namespace name type]} (last keys-metadata)
+                access-key (condp = type
+                             :keyword (keyword namespace "keys")
+                             :string :strs
+                             :symbol (keyword namespace "syms"))]
+            (merge acc (recursive-keys-destructurings access-key v)))
+
+          key
+          (let [{:keys [namespace name type]} key-metadata
+                access-key (condp = type
+                             :keyword (keyword namespace "keys")
+                             :string :strs
+                             :symbol (keyword namespace "syms"))]
+            (if (= accessor-name name)
+              (update acc access-key #(-> (conj % accessor) vec))
+              (merge acc {accessor key}))))))
     {}
     accessor-data))
 
@@ -264,7 +332,8 @@
 
 (defn- let-form->destructured-let
   [data]
-  (let [processed-data (->> (parse data)
+  (let [processed-data (->> data
+                            ->parse
                             ->symbol-accessors
                             ->destructured-bindings
                             ->unform-data)]
@@ -284,6 +353,13 @@
                                             :edn-form (first forms)
                                             :spec form-spec}}))))
 
+;; Properly emit qualified keys
+(defmethod print-method IPersistentMap
+  [m, ^Writer w]
+  (#'clojure.core/print-meta m w)
+  (#'clojure.core/print-map m #'clojure.core/pr-on w))
+
+
 (comment
 
   (let [in-exprs '(let [m {:k {:kk 1}}
@@ -291,10 +367,33 @@
                     kk)]
     (let->destructured-let (pr-str in-exprs)))
 
-  )
+  (let [in-exprs '(let [multiplayer-game-state {:joe {:class "Ranger"
+                                                      :weapon "Longbow"
+                                                      :score 100}
+                                                :jane {:class "Knight"
+                                                       :weapon "Greatsword"
+                                                       :score 140}
+                                                :ryan {:class "Wizard"
+                                                       :weapon "Mystic Staff"
+                                                       :hi-scores {:today 200
+                                                                   :all-time 290}
+                                                       :score 150}}
+                        highest (get-in multiplayer-game-state [:ryan :hi-scores :all-time])]
+                    highest)]
+    (let->destructured-let (pr-str in-exprs)))
 
-;; Properly emit qualified keys
-(defmethod print-method IPersistentMap
-  [m, ^Writer w]
-  (#'clojure.core/print-meta m w)
-  (#'clojure.core/print-map m #'clojure.core/pr-on w))
+  (s/conform ::let '(let [multiplayer-game-state {:joe {:class "Ranger"
+                                                        :weapon "Longbow"
+                                                        :score 100}
+                                                  :jane {:class "Knight"
+                                                         :weapon "Greatsword"
+                                                         :score 140}
+                                                  :ryan {:class "Wizard"
+                                                         :weapon "Mystic Staff"
+                                                         :hi-scores {:today 200
+                                                                     :all-time 290}
+                                                         :score 150}}
+                          {{{highest :all-time} :hi-scores} :ryan} multiplayer-game-state]
+                      highest))
+
+  )
