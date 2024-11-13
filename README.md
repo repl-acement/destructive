@@ -65,7 +65,8 @@ You can see expected usage patterns in the tests.
                                    {:form [:map-destructure {:a/keys [k1], :b/keys [k2]}],
                                     :init-expr m}],
                         :exprs (+ k1 k2)},
-          :unformed (let [m {:a/k1 1, :b/k2 2, :c/k3 3} {:a/keys [k1], :b/keys [k2]} m] (+ k1 k2))}}
+          :unformed (let [m {:a/k1 1, :b/k2 2, :c/k3 3}
+                          {:a/keys [k1], :b/keys [k2]} m] (+ k1 k2))}}
 ```
 
 # FAQ

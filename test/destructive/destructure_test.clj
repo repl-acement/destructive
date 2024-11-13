@@ -296,7 +296,73 @@
                :init-expr symbol-keys}
              (-> result :unform :unform-form :bindings last)))))
 
-  )
+  (testing "associative destructuring can be nested"
+    (let [in-bindings '(let [multiplayer-game-state {:joe {:class "Ranger"
+                                                           :weapon "Longbow"
+                                                           :score 100}
+                                                     :jane {:class "Knight"
+                                                            :weapon "Greatsword"
+                                                            :score 140}
+                                                     :ryan {:class "Wizard"
+                                                            :weapon "Mystic Staff"
+                                                            :score 150}}
+                             class (get-in multiplayer-game-state [:joe :class])]
+                         class)
+          result (->> (pr-str in-bindings)
+                      sut/let->destructured-let)]
+      (is (= "Ranger" (eval (-> result :unform :unformed))))
+      (is (= 2 (count (-> result :unform :unform-form :bindings))))
+      (is (= '{:form [:map-destructure {{:keys [class]} :joe}]
+               :init-expr multiplayer-game-state}
+             (-> result :unform :unform-form :bindings last)))))
+
+  (testing "associative destructuring can be nested with renames"
+    (let [in-bindings '(let [multiplayer-game-state {:joe {:class "Ranger"
+                                                           :weapon "Longbow"
+                                                           :score 100}
+                                                     :jane {:class "Knight"
+                                                            :weapon "Greatsword"
+                                                            :score 140}
+                                                     :ryan {:class "Wizard"
+                                                            :weapon "Mystic Staff"
+                                                            :score 150}}
+                             joe-class (get-in multiplayer-game-state [:joe :class])]
+                         joe-class)
+          result (->> (pr-str in-bindings)
+                      sut/let->destructured-let)]
+      (is (= "Ranger" (eval (-> result :unform :unformed))))
+      (is (= 2 (count (-> result :unform :unform-form :bindings))))
+      (is (= '{:form [:map-destructure {{joe-class :class} :joe}]
+               :init-expr multiplayer-game-state}
+             (-> result :unform :unform-form :bindings last)))))
+
+  (testing "and can be combined with sequential destructuring as needed"
+    (let [in-bindings '(let [multiplayer-game-state {:joe {:class "Ranger"
+                                                           :weapon "Longbow"
+                                                           :score 100}
+                                                     :jane {:class "Knight"
+                                                            :weapon "Greatsword"
+                                                            :score 140}
+                                                     :ryan {:class "Wizard"
+                                                            :weapon "Mystic Staff"
+                                                            :score 150}}
+                             class (get-in multiplayer-game-state [:joe :class])
+                             weapon (get-in multiplayer-game-state [:joe :weapon])]
+                         [class weapon])
+          result (->> (pr-str in-bindings)
+                      sut/let->destructured-let)]
+      (is (= ["Ranger" "Longbow"] (eval (-> result :unform :unformed))))
+      (is (= 2 (count (-> result :unform :unform-form :bindings))))
+      ;; currently like this
+      (is (= '{:form [:map-destructure {{:keys [class]} :joe
+                                        {:keys [weapon]} :joe}]
+               :init-expr multiplayer-game-state}
+             (-> result :unform :unform-form :bindings last)))
+      ;; should be like this
+      (is (= '{:form [:map-destructure {{:keys [class weapon]} :joe}]
+               :init-expr multiplayer-game-state}
+             (-> result :unform :unform-form :bindings last))))))
+
 
 
 

@@ -3,6 +3,7 @@
     [clojure.core.specs.alpha :as specs]
     [clojure.spec.alpha :as s]
     [clojure.spec.gen.alpha :as gen]
+    [clojure.walk :as walk]
     [destructive.form-reader :as form-reader])
   (:import (clojure.lang IPersistentMap)
            (java.io Writer)))
@@ -14,13 +15,6 @@
         :symbol symbol?))
 
 (s/def ::let
-  (s/cat
-    :name (s/and symbol? #(= 'let %))
-    :bindings (s/and (s/conformer identity vec)
-                     ::specs/bindings)
-    :exprs (s/? any?)))
-
-(s/def ::let-qualified
   (s/cat
     :name (s/and symbol? #(= 'let %))
     :bindings (s/and (s/conformer identity vec)
@@ -143,22 +137,14 @@
                             :parsed-form parsed-form
                             :bindings-symbols bindings-symbols})))))
 
-(defn- keys->access-path
-  [keys]
-  (reduce (fn [result [_ key-name]]
-            (conj result key-name))
-          []
-          keys))
-
-;TODO - code for having X as a map? cos that will need to be good
-;enough where we don't have a literal map in the let bindings.
+;;TODO - code for having X as a `map?` or even just a `symbol?` cos that will
+;; need to be good enough where we don't have a literal map in the let bindings.
 (defn- map-accessor?
   "Assumes that the map is declared in the bindings"
   [bindings-syms {:keys [form-name] :as sym-data}]
-  (when (contains? #{:get :get-in :lookup} form-name)
-    (let [{{:keys [ref]} :map} sym-data]
-      (some? (get bindings-syms ref)))))
-
+  (and (contains? #{:get :get-in :lookup} form-name)
+       (let [{{:keys [ref]} :map} sym-data]
+         (some? (get bindings-syms ref)))))
 
 (defn- keyword-meta
   [key-name]
@@ -270,12 +256,46 @@
       (if-not next-kw
         result
         (let [kw-name (name next-kw)]
+          ;(prn :recursive-keys-destructurings :result result :kw-name kw-name)
           (recur (cond
                    (and (empty? result)
                         (= (name accessor) kw-name)) (hash-map access-key [accessor])
                    (empty? result) (hash-map accessor next-kw)
                    :else (hash-map result next-kw))
                  (rest m)))))))
+
+(defn k->access-type
+  [k]
+  (let [t (atom nil)]
+    (->> k
+         (walk/postwalk
+           (fn [x]
+             (when (and (map? x)
+                        (contains? #{:keys :strs :syms} (first (keys x))))
+               (reset! t (first (keys x))))
+             x)))
+    @t))
+
+(defn merge-kw-keys
+  [kw-keys]
+  (reduce (fn [result [k v]]
+            (cond
+              (contains? #{:keys :strs :syms} (first (keys k)))
+              (let [t (k->access-type k)
+                    b (first (vals k))
+                    _ (prn [:k k :v v :t t :b b])]
+                (-> result
+                    (update :key-bindings (comp vec concat) b)
+                    (assoc :access-key t)))
+
+              (map? (first (keys k)))
+              result
+
+              :else
+              result))
+          {:access-key nil
+           :key-bindings []}
+          kw-keys))
 
 (defn keys-destructurings
   [accessor-data]
@@ -285,11 +305,12 @@
         (cond
           keys
           ;; need the key type of the last key from the list
-          (let [{:keys [namespace name type]} (last keys-metadata)
+          (let [{:keys [namespace type]} (last keys-metadata)
                 access-key (condp = type
                              :keyword (keyword namespace "keys")
                              :string :strs
                              :symbol (keyword namespace "syms"))]
+            ;(prn :keys-destructurings :acc acc :rkds (recursive-keys-destructurings access-key v))
             (merge acc (recursive-keys-destructurings access-key v)))
 
           key
