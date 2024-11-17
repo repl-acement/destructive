@@ -101,30 +101,18 @@ See TODO.
 - [X] :strs and :syms for string and symbol keys respectively & tests
   - [X] namespaced :syms
 - [X] Bindings, nested keys
-  - [X] Round-trip unqualified key access in bindings
-  - [ ] Round-trip multiple unqualified key access
-  - [ ] Round-trip namespaced key access
-  - [ ] Round-trip multiple namespaced key access
+  - [X] unqualified key access in bindings
+  - [X] merge multiple unqualified key access
+  - [X] namespaced key access
+  - [ ] merge multiple namespaced key access
 - [ ] Bindings, mix of top level and nested keys & tests
-- [ ] Expressions, top level keys
-  - [ ] Round-trip unqualified key access
-  - [ ] Round-trip multiple unqualified key access
-  - [ ] Round-trip namespaced key access
-  - [ ] Round-trip multiple namespaced key access
-- [ ] Expressions, nested keys
-  - [ ] Round-trip unqualified key access
-  - [ ] Round-trip multiple unqualified key access
-  - [ ] Round-trip namespaced key access
-  - [ ] Round-trip multiple namespaced key access
-- [ ] Expressions, mix of top level and nested keys
-- [ ] Expressions and bindings
 - [ ] Linter checks on unformed results
 
 ## Sequential destructuring
 - [ ] Become motivated to do this
 
 
-## Credits, thanks and references
+## Credits, thanks and references 🙏
 
 ### `conform` and `unform`
 I found this [detailed post](https://blog.klipse.tech/clojure/2019/03/08/spec-custom-defn.html) from [Yehonathan Sharvit](https://blog.klipse.tech/).
@@ -133,9 +121,14 @@ It was especially useful in understanding how to manipulate the data that is pro
 
 ### Handling namespaced keywords
 
-I was stuck with how qualified keys are emitted. 
+I was stuck with how qualified keys are emitted.
 
 Thanks to Lasse Määttä who suggested using [*print-namespace-maps*](https://clojuredocs.org/clojure.core/*print-namespace-maps*) via `#clojure-spec` on the Clojurian Slack
+
+### Merging recursive keys
+I was pulling my hair our cos I thought this would be simple but I was stuck.
+
+Thanks to Thomas Moerman who is a hella smart and banged out the `inverted-merge` function and pasted it into the Clojurian Slack
 
 ### spec.alpha vs spec2
 

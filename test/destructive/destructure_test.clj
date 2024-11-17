@@ -169,7 +169,7 @@
              ;; TODO ... does placement of destructuring in the bindings list matter?
              (-> result :unform :unform-form :bindings last))))))
 
-(deftest nested-keys
+(deftest nested-simple-keys
   (testing "An unqualified key is accessed via get-in"
     (let [in-bindings '(let [m {:k {:kk 1}}
                              kk (get-in m [:k :kk])]
@@ -179,6 +179,98 @@
       (is (= 1 (eval (-> result :unform :unformed))))
       (is (= 2 (count (-> result :unform :unform-form :bindings))))
       (is (= '{:form [:map-destructure {{:keys [kk]} :k}], :init-expr m}
+             (-> result :unform :unform-form :bindings last)))))
+  (testing "An unqualified key is accessed via get-in can be renamed"
+    (let [in-bindings '(let [m {:k {:kk 1}}
+                             xx (get-in m [:k :kk])]
+                         xx)
+          result (->> (pr-str in-bindings)
+                      sut/let->destructured-let)]
+      (is (= 1 (eval (-> result :unform :unformed))))
+      (is (= 2 (count (-> result :unform :unform-form :bindings))))
+      (is (= '{:form [:map-destructure {{xx :kk} :k}] :init-expr m}
+             (-> result :unform :unform-form :bindings last)))))
+  (testing "Several unqualified keys are possible"
+    (let [in-bindings '(let [m {:k {:kk 1} :x {:xx 2}}
+                             kk (get-in m [:k :kk])
+                             xx (get-in m [:x :xx])]
+                         (+ kk xx))
+          result (->> (pr-str in-bindings)
+                      sut/let->destructured-let)]
+      (is (= 3 (eval (-> result :unform :unformed))))
+      (is (= 2 (count (-> result :unform :unform-form :bindings))))
+      (is (= '{:form [:map-destructure {{:keys [kk]} :k
+                                        {:keys [xx]} :x}] :init-expr m}
+             (-> result :unform :unform-form :bindings last)))))
+  (testing "Several unqualified keys that access the same key are merged"
+    (let [in-bindings '(let [m {:k {:kk 1 :mm 2}}
+                             kk (get-in m [:k :kk])
+                             mm (get-in m [:k :mm])]
+                         (+ kk mm))
+          result (->> (pr-str in-bindings)
+                      sut/let->destructured-let)]
+      (is (= 3 (eval (-> result :unform :unformed))))
+      (is (= 2 (count (-> result :unform :unform-form :bindings))))
+      (is (= '{:form [:map-destructure {{:keys [mm kk]} :k}] :init-expr m}
+             (-> result :unform :unform-form :bindings last))))))
+
+(deftest nested-qualified-keys
+  (testing "An qualified key is accessed via get-in"
+    (let [in-bindings '(let [m {:k {:a/kk 1}}
+                             kk (get-in m [:k :a/kk])]
+                         kk)
+          result (->> (pr-str in-bindings)
+                      sut/let->destructured-let)]
+      (is (= 1 (eval (-> result :unform :unformed))))
+      (is (= 2 (count (-> result :unform :unform-form :bindings))))
+      (is (= '{:form [:map-destructure {{:a/keys [kk]} :k}] :init-expr m}
+             (-> result :unform :unform-form :bindings last)))))
+  (testing "An qualified key is accessed via get-in can be renamed"
+    (let [in-bindings '(let [m {:k {:a/kk 1}}
+                             xx (get-in m [:k :a/kk])]
+                         xx)
+          result (->> (pr-str in-bindings)
+                      sut/let->destructured-let)]
+      (is (= 1 (eval (-> result :unform :unformed))))
+      (is (= 2 (count (-> result :unform :unform-form :bindings))))
+      (is (= '{:form [:map-destructure {{xx :a/kk} :k}] :init-expr m}
+             (-> result :unform :unform-form :bindings last)))))
+  (testing "Several qualified keys are possible"
+    (let [in-bindings '(let [m {:k {:a/kk 1} :x {:b/xx 2}}
+                             kk (get-in m [:k :a/kk])
+                             xx (get-in m [:x :b/xx])]
+                         (+ kk xx))
+          result (->> (pr-str in-bindings)
+                      sut/let->destructured-let)]
+      (is (= 3 (eval (-> result :unform :unformed))))
+      (is (= 2 (count (-> result :unform :unform-form :bindings))))
+      (is (= '{:form [:map-destructure {{:a/keys [kk]} :k
+                                        {:b/keys [xx]} :x}] :init-expr m}
+             (-> result :unform :unform-form :bindings last)))))
+  (testing "Several qualified keys that access the same key are merged"
+    (let [in-bindings '(let [m {:k {:a/kk 1 :a/mm 2}}
+                             kk (get-in m [:k :a/kk])
+                             mm (get-in m [:k :a/mm])]
+                         (+ kk mm))
+          result (->> (pr-str in-bindings)
+                      sut/let->destructured-let)]
+      (prn :fail-1 (-> result :unform))
+      (is (= 3 (eval (-> result :unform :unformed))))
+      (is (= 2 (count (-> result :unform :unform-form :bindings))))
+      (is (= '{:form [:map-destructure {{:a/keys [mm kk]} :k}] :init-expr m}
+             (-> result :unform :unform-form :bindings last)))))
+  (testing "Several qualified keys from different namespaces are not merged"
+    (let [in-bindings '(let [m {:k {:a/kk 1 :a/mm 2}}
+                             kk (get-in m [:k :a/kk])
+                             mm (get-in m [:k :a/mm])]
+                         (+ kk mm))
+          result (->> (pr-str in-bindings)
+                      sut/let->destructured-let)]
+      (prn :fail-2 (-> result :unform))
+      (is (= 1 (eval (-> result :unform :unformed))))
+      (is (= 2 (count (-> result :unform :unform-form :bindings))))
+      (is (= '{:form [:map-destructure {{:a/keys [kk]} :k
+                                        {:b/keys [mm]} :k}] :init-expr m}
              (-> result :unform :unform-form :bindings last))))))
 
 (deftest destructuring-guide-examples
@@ -353,13 +445,7 @@
                       sut/let->destructured-let)]
       (is (= ["Ranger" "Longbow"] (eval (-> result :unform :unformed))))
       (is (= 2 (count (-> result :unform :unform-form :bindings))))
-      ;; currently like this
-      (is (= '{:form [:map-destructure {{:keys [class]} :joe
-                                        {:keys [weapon]} :joe}]
-               :init-expr multiplayer-game-state}
-             (-> result :unform :unform-form :bindings last)))
-      ;; should be like this
-      (is (= '{:form [:map-destructure {{:keys [class weapon]} :joe}]
+      (is (= '{:form [:map-destructure {{:keys [weapon class]} :joe}]
                :init-expr multiplayer-game-state}
              (-> result :unform :unform-form :bindings last))))))
 

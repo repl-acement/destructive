@@ -3,7 +3,6 @@
     [clojure.core.specs.alpha :as specs]
     [clojure.spec.alpha :as s]
     [clojure.spec.gen.alpha :as gen]
-    [clojure.walk :as walk]
     [destructive.form-reader :as form-reader])
   (:import (clojure.lang IPersistentMap)
            (java.io Writer)))
@@ -65,6 +64,13 @@
         :lookup ::map-lookup
         :literal-map map?
         :unknown any?))
+
+(defn ->accessor-type
+  [keyword-ns access-type]
+  (condp = access-type
+    :keyword (keyword keyword-ns "keys")
+    :string :strs
+    :symbol (keyword keyword-ns "syms")))
 
 (defn- lookup-symbol
   "Read the data and attempt to resolve symbol-name.
@@ -249,81 +255,78 @@
    highest (get-in multiplayer-game-state [:ryan :hi-scores :all-time])
    to this destructuring binding:
    {{{highest :all-time} :hi-scores} :ryan} multiplayer-game-state"
-  [access-key {:keys [accessor access-path]}]
-  (loop [result {}
-         m (reverse access-path)]
-    (let [next-kw (first m)]
-      (if-not next-kw
-        result
-        (let [kw-name (name next-kw)]
-          ;(prn :recursive-keys-destructurings :result result :kw-name kw-name)
-          (recur (cond
-                   (and (empty? result)
-                        (= (name accessor) kw-name)) (hash-map access-key [accessor])
-                   (empty? result) (hash-map accessor next-kw)
-                   :else (hash-map result next-kw))
-                 (rest m)))))))
+  [accessor-type {:keys [accessor access-path keys-metadata] :as x}]
+  (let [destructuring (loop [result {}
+                             input (reverse access-path)]
+                        (let [next-kw (first input)]
+                          (if-not next-kw
+                            result
+                            (let [kw-name (name next-kw)]
+                              (recur (cond
+                                       (and (empty? result)
+                                            (= (name accessor) kw-name)) (hash-map accessor-type [accessor])
+                                       (empty? result) (hash-map accessor next-kw)
+                                       :else (hash-map result next-kw))
+                                     (rest input))))))]
+    {:recursive-key true
+     :destructuring destructuring}))
 
-(defn k->access-type
-  [k]
-  (let [t (atom nil)]
-    (->> k
-         (walk/postwalk
-           (fn [x]
-             (when (and (map? x)
-                        (contains? #{:keys :strs :syms} (first (keys x))))
-               (reset! t (first (keys x))))
-             x)))
-    @t))
+(defn- inverted-merge
+  "This code is thanks to Thomas Moerman"                  ;; 🙏
+  [input]
+  (if (-> input first last sequential?)                     ;; stop recursion
+    input
+    (->> input
+         (group-by last)
+         (map (fn [[person group]]
+                [(->> group
+                      (map first)                           ;; get group elements
+                      (reduce (fn [acc {:keys [keys strs syms] :as m}]
+                                (cond
+                                  keys (update acc :keys (comp vec concat) keys)
+                                  strs (update acc :strs (comp vec concat) strs)
+                                  syms (update acc :syms (comp vec concat) syms)
+                                  :else (merge acc m))) {})
+                      (inverted-merge))                     ;; recursion!
+                 person]))
+         (into {}))))
 
-(defn merge-kw-keys
-  [kw-keys]
-  (reduce (fn [result [k v]]
-            (cond
-              (contains? #{:keys :strs :syms} (first (keys k)))
-              (let [t (k->access-type k)
-                    b (first (vals k))
-                    _ (prn [:k k :v v :t t :b b])]
-                (-> result
-                    (update :key-bindings (comp vec concat) b)
-                    (assoc :access-key t)))
+(defn- merge-destructurings
+  [{:keys [recursive-keys]}]
+  (->> recursive-keys
+       (map :destructuring)
+       (apply merge)
+       inverted-merge))
 
-              (map? (first (keys k)))
-              result
-
-              :else
-              result))
-          {:access-key nil
-           :key-bindings []}
-          kw-keys))
-
-(defn keys-destructurings
+(defn- keys-destructurings
   [accessor-data]
-  (reduce
-    (fn [acc {:keys [accessor key keys key-metadata keys-metadata] :as v}]
-      (let [accessor-name (name accessor)]
-        (cond
-          keys
-          ;; need the key type of the last key from the list
-          (let [{:keys [namespace type]} (last keys-metadata)
-                access-key (condp = type
-                             :keyword (keyword namespace "keys")
-                             :string :strs
-                             :symbol (keyword namespace "syms"))]
-            ;(prn :keys-destructurings :acc acc :rkds (recursive-keys-destructurings access-key v))
-            (merge acc (recursive-keys-destructurings access-key v)))
+  (let [destructurings (reduce
+                         (fn [acc {:keys [accessor key keys key-metadata keys-metadata]
+                                   :as v}]
+                           (let [accessor-name (name accessor)]
+                             (cond
+                               keys
+                               ;; access is on the key type of the last key from the list
+                               (let [{:keys [namespace type]} (last keys-metadata)
+                                     accessor-type (->accessor-type namespace type)
+                                     destructuring (recursive-keys-destructurings accessor-type v)]
+                                 (-> acc
+                                     (update :recursive-keys conj destructuring)
+                                     (update :recursive-keys-count (fnil inc 0))))
 
-          key
-          (let [{:keys [namespace name type]} key-metadata
-                access-key (condp = type
-                             :keyword (keyword namespace "keys")
-                             :string :strs
-                             :symbol (keyword namespace "syms"))]
-            (if (= accessor-name name)
-              (update acc access-key #(-> (conj % accessor) vec))
-              (merge acc {accessor key}))))))
-    {}
-    accessor-data))
+                               key
+                               (let [{:keys [namespace name type]} key-metadata
+                                     accessor-type (->accessor-type namespace type)]
+                                 (if (= accessor-name name)
+                                   (update acc accessor-type #(-> (conj % accessor) vec))
+                                   (merge acc {accessor key}))))))
+                         {}
+                         accessor-data)
+        n-recursive-keys (get destructurings :recursive-keys-count 0)]
+    (cond
+      (> n-recursive-keys 1) (merge-destructurings destructurings)
+      (= n-recursive-keys 1) (-> destructurings :recursive-keys first :destructuring)
+      :else destructurings)))
 
 (defn- add-destructurings
   [map-accessors bindings]
@@ -382,12 +385,6 @@
 
 
 (comment
-
-  (let [in-exprs '(let [m {:k {:kk 1}}
-                        kk (get m :k)]
-                    kk)]
-    (let->destructured-let (pr-str in-exprs)))
-
   (let [in-exprs '(let [multiplayer-game-state {:joe {:class "Ranger"
                                                       :weapon "Longbow"
                                                       :score 100}
@@ -396,25 +393,9 @@
                                                        :score 140}
                                                 :ryan {:class "Wizard"
                                                        :weapon "Mystic Staff"
-                                                       :hi-scores {:today 200
-                                                                   :all-time 290}
                                                        :score 150}}
-                        highest (get-in multiplayer-game-state [:ryan :hi-scores :all-time])]
-                    highest)]
+                        class (get-in multiplayer-game-state [:joe :class])
+                        weapon (get-in multiplayer-game-state [:joe :weapon])]
+                    [class weapon])]
     (let->destructured-let (pr-str in-exprs)))
-
-  (s/conform ::let '(let [multiplayer-game-state {:joe {:class "Ranger"
-                                                        :weapon "Longbow"
-                                                        :score 100}
-                                                  :jane {:class "Knight"
-                                                         :weapon "Greatsword"
-                                                         :score 140}
-                                                  :ryan {:class "Wizard"
-                                                         :weapon "Mystic Staff"
-                                                         :hi-scores {:today 200
-                                                                     :all-time 290}
-                                                         :score 150}}
-                          {{{highest :all-time} :hi-scores} :ryan} multiplayer-game-state]
-                      highest))
-
   )
