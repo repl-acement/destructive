@@ -104,7 +104,7 @@ See TODO.
   - [X] unqualified key access in bindings
   - [X] merge multiple unqualified key access
   - [X] namespaced key access
-  - [ ] merge multiple namespaced key access
+  - [X] merge multiple namespaced key access
 - [ ] Bindings, mix of top level and nested keys & tests
 - [ ] Linter checks on unformed results
 

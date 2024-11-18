@@ -254,23 +254,21 @@
                          (+ kk mm))
           result (->> (pr-str in-bindings)
                       sut/let->destructured-let)]
-      (prn :fail-1 (-> result :unform))
       (is (= 3 (eval (-> result :unform :unformed))))
       (is (= 2 (count (-> result :unform :unform-form :bindings))))
-      (is (= '{:form [:map-destructure {{:a/keys [mm kk]} :k}] :init-expr m}
+      (is (= '{:form [:map-destructure {{:a/keys [kk mm]} :k}] :init-expr m}
              (-> result :unform :unform-form :bindings last)))))
   (testing "Several qualified keys from different namespaces are not merged"
-    (let [in-bindings '(let [m {:k {:a/kk 1 :a/mm 2}}
+    (let [in-bindings '(let [m {:k {:a/kk 1 :b/mm 2}}
                              kk (get-in m [:k :a/kk])
-                             mm (get-in m [:k :a/mm])]
+                             mm (get-in m [:k :b/mm])]
                          (+ kk mm))
           result (->> (pr-str in-bindings)
                       sut/let->destructured-let)]
-      (prn :fail-2 (-> result :unform))
-      (is (= 1 (eval (-> result :unform :unformed))))
+      (is (= 3 (eval (-> result :unform :unformed))))
       (is (= 2 (count (-> result :unform :unform-form :bindings))))
-      (is (= '{:form [:map-destructure {{:a/keys [kk]} :k
-                                        {:b/keys [mm]} :k}] :init-expr m}
+      (is (= '{:form [:map-destructure {{:a/keys [kk]
+                                         :b/keys [mm]} :k}] :init-expr m}
              (-> result :unform :unform-form :bindings last))))))
 
 (deftest destructuring-guide-examples

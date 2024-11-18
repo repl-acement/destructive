@@ -255,7 +255,7 @@
    highest (get-in multiplayer-game-state [:ryan :hi-scores :all-time])
    to this destructuring binding:
    {{{highest :all-time} :hi-scores} :ryan} multiplayer-game-state"
-  [accessor-type {:keys [accessor access-path keys-metadata] :as x}]
+  [accessor-type {:keys [accessor access-path] :as input}]
   (let [destructuring (loop [result {}
                              input (reverse access-path)]
                         (let [next-kw (first input)]
@@ -269,26 +269,42 @@
                                        :else (hash-map result next-kw))
                                      (rest input))))))]
     {:recursive-key true
-     :destructuring destructuring}))
+     :destructuring destructuring
+     :input input}))
 
 (defn- inverted-merge
-  "This code is thanks to Thomas Moerman"                  ;; 🙏
+  "This code is mostly thanks to Thomas Moerman"            ;; 🙏
   [input]
   (if (-> input first last sequential?)                     ;; stop recursion
     input
     (->> input
          (group-by last)
-         (map (fn [[person group]]
-                [(->> group
-                      (map first)                           ;; get group elements
-                      (reduce (fn [acc {:keys [keys strs syms] :as m}]
-                                (cond
-                                  keys (update acc :keys (comp vec concat) keys)
-                                  strs (update acc :strs (comp vec concat) strs)
-                                  syms (update acc :syms (comp vec concat) syms)
-                                  :else (merge acc m))) {})
+         (map (fn [[k values]]
+                [(->> values
+                      (map first)                           ;; get values elements
+                      (reduce (fn [acc m]
+                                (let [access-id (some-> m keys first)
+                                      qualified-kw (when (and (qualified-keyword? access-id)
+                                                              (namespace access-id))
+                                                     access-id)
+                                      qualified-sym (when (and (qualified-symbol? access-id)
+                                                               (namespace access-id))
+                                                      access-id)]
+                                  (cond
+                                    qualified-kw (update acc qualified-kw (comp vec concat) (get m qualified-kw))
+
+                                    (:keys m) (update acc :keys (comp vec concat) (:keys m))
+
+                                    (:strs m) (update acc :strs (comp vec concat) (:strs m))
+
+                                    qualified-sym (update acc qualified-sym (comp vec concat) (get m qualified-sym))
+
+                                    (:syms m) (update acc :syms (comp vec concat) (:syms m))
+
+                                    :else
+                                    (merge acc m)))) {})
                       (inverted-merge))                     ;; recursion!
-                 person]))
+                 k]))
          (into {}))))
 
 (defn- merge-destructurings
