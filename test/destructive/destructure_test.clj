@@ -1,5 +1,6 @@
 (ns destructive.destructure-test
   (:require
+    [destructive.person :as p]
     [clojure.test :refer [deftest is testing]]
     [destructive.destructure :as sut]))
 
@@ -270,6 +271,25 @@
       (is (= '{:form [:map-destructure {{:a/keys [kk]
                                          :b/keys [mm]} :k}] :init-expr m}
              (-> result :unform :unform-form :bindings last))))))
+
+(deftest autoresolved-keywords
+  (testing "An auto-resolved key is accessed via get"
+    (let [in-bindings '(let [m {::p/role-name "Smashy"}
+                             role-name (get m ::p/role-name)]
+                         role-name)
+          result (->> (pr-str in-bindings)
+                      sut/let->destructured-let)]
+      (is (= "Smashy" (eval (-> result :unform :unformed))))
+      (is (= 2 (count (-> result :unform :unform-form :bindings))))
+      ;; not quite right, is
+      (is (= '{:form [:map-destructure {:destructive.person/keys [role-name]}]
+               :init-expr m}
+             (-> result :unform :unform-form :bindings last)))
+      ;; should be ... though both pass the tests :)
+      (is (= '{:form [:map-destructure {::p/keys [role-name]}]
+               :init-expr m}
+             (-> result :unform :unform-form :bindings last)))))
+  )
 
 (deftest destructuring-guide-examples
   (testing "simple key bindings are destructured into a map"

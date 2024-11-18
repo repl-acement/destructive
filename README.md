@@ -105,6 +105,8 @@ See TODO.
   - [X] merge multiple unqualified key access
   - [X] namespaced key access
   - [X] merge multiple namespaced key access
+  - [ ] same for auto-resolved key access
+
 - [ ] Bindings, mix of top level and nested keys & tests
 - [ ] Linter checks on unformed results
 
