@@ -272,8 +272,24 @@
      :destructuring destructuring
      :input input}))
 
+(defn- accessor-ns->ns-alias
+  [accessor-ns]
+  (let [aliased-nses (reduce-kv (fn [acc k v]
+                                  (conj acc [k (ns-name v)]))
+                                []
+                                (ns-aliases *ns*))
+        result (->> aliased-nses
+                    (filter (fn xx [[accessor-name _]]
+                              (contains? #{accessor-ns} accessor-name)))
+                    first
+                    last)]
+    (doseq [aliased-ns aliased-nses]
+      (prn :aliased-ns aliased-ns))
+    (prn :result result)
+    result))
+
 (defn- inverted-merge
-  "This code is mostly thanks to Thomas Moerman"            ;; 🙏
+  "This code owes thanks to Thomas Moerman. Bugs are mine." ;; 🙏
   [input]
   (if (-> input first last sequential?)                     ;; stop recursion
     input
@@ -283,26 +299,21 @@
                 [(->> values
                       (map first)                           ;; get values elements
                       (reduce (fn [acc m]
-                                (let [access-id (some-> m keys first)
-                                      qualified-kw (when (and (qualified-keyword? access-id)
-                                                              (namespace access-id))
-                                                     access-id)
-                                      qualified-sym (when (and (qualified-symbol? access-id)
-                                                               (namespace access-id))
-                                                      access-id)]
+                                (let [qualified-thing (fn [type-pred? thing]
+                                                        (when (and (type-pred? thing)
+                                                                   (namespace thing))
+                                                          thing))
+                                      access-id (some-> m keys first)
+                                      qualified-kw (qualified-thing qualified-keyword? access-id)
+                                      qualified-sym (qualified-thing qualified-symbol? access-id)]
                                   (cond
-                                    qualified-kw (update acc qualified-kw (comp vec concat) (get m qualified-kw))
-
+                                    qualified-kw (update acc qualified-kw (comp vec concat) (get m access-id))
+                                    qualified-sym (update acc qualified-sym (comp vec concat) (get m access-id))
                                     (:keys m) (update acc :keys (comp vec concat) (:keys m))
-
                                     (:strs m) (update acc :strs (comp vec concat) (:strs m))
-
-                                    qualified-sym (update acc qualified-sym (comp vec concat) (get m qualified-sym))
-
                                     (:syms m) (update acc :syms (comp vec concat) (:syms m))
-
-                                    :else
-                                    (merge acc m)))) {})
+                                    :else (merge acc m))))
+                              {})
                       (inverted-merge))                     ;; recursion!
                  k]))
          (into {}))))
@@ -389,9 +400,16 @@
       {:error :only-one-form-supported
        :input form-str
        :forms forms}
-      (let-form->destructured-let {:inputs {:string-form form-str
-                                            :edn-form (first forms)
-                                            :spec form-spec}}))))
+      (let [aliased-nses (reduce-kv (fn [acc k v]
+                                      (conj acc [k (ns-name v)]))
+                                    []
+                                    (ns-aliases *ns*))]
+        (doseq [aliased-ns aliased-nses]
+          (prn :aliased-ns aliased-ns))
+        (let-form->destructured-let {:inputs {:string-form form-str
+                                              :edn-form (first forms)
+                                              :spec form-spec}
+                                     :aliased-nses aliased-nses})))))
 
 ;; Properly emit qualified keys
 (defmethod print-method IPersistentMap

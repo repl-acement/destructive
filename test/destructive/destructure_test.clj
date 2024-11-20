@@ -1,6 +1,5 @@
 (ns destructive.destructure-test
   (:require
-    [destructive.person :as p]
     [clojure.test :refer [deftest is testing]]
     [destructive.destructure :as sut]))
 
@@ -270,26 +269,42 @@
       (is (= 2 (count (-> result :unform :unform-form :bindings))))
       (is (= '{:form [:map-destructure {{:a/keys [kk]
                                          :b/keys [mm]} :k}] :init-expr m}
+             (-> result :unform :unform-form :bindings last)))))
+  (testing "Qualified keys can access unqualified keys"
+    (let [in-bindings '(let [m {:a/kk {:a 1 :b 2}}
+                             a (get-in m [:a/kk :a])
+                             b (get-in m [:a/kk :b])]
+                         (+ a b))
+          result (->> (pr-str in-bindings)
+                      sut/let->destructured-let)]
+      (is (= 3 (eval (-> result :unform :unformed))))
+      (is (= 2 (count (-> result :unform :unform-form :bindings))))
+      (is (= '{:form [:map-destructure {{:keys [a b]} :a/kk}] :init-expr m}
              (-> result :unform :unform-form :bindings last))))))
 
 (deftest autoresolved-keywords
   (testing "An auto-resolved key is accessed via get"
-    (let [in-bindings '(let [m {::p/role-name "Smashy"}
-                             role-name (get m ::p/role-name)]
-                         role-name)
+    (let [in-bindings '(let [m {:k {::sut/role-name "Smashy"}
+                                ::sut/actions {:smash :hammer}}
+                             role-name (get-in m [:k ::sut/role-name])
+                             smash (get-in m [::sut/actions :smash])]
+                         [role-name smash])
           result (->> (pr-str in-bindings)
                       sut/let->destructured-let)]
-      (is (= "Smashy" (eval (-> result :unform :unformed))))
+      (is (= ["Smashy" :hammer] (eval (-> result :unform :unformed))))
       (is (= 2 (count (-> result :unform :unform-form :bindings))))
       ;; not quite right, is
-      (is (= '{:form [:map-destructure {:destructive.person/keys [role-name]}]
+      (is (= '{:form [:map-destructure {{:destructive.destructure/keys [role-name]} :k
+                                        {:keys [smash]} :destructive.destructure/actions}]
                :init-expr m}
              (-> result :unform :unform-form :bindings last)))
-      ;; should be ... though both pass the tests :)
-      (is (= '{:form [:map-destructure {::p/keys [role-name]}]
+      ;; should be ... though both pass the tests, cos the reader is :magic: :)
+      ;; main point is that the full ns should be re-written to be `::sut/` where
+      ;; there is a ns-alias for `sut`
+      (is (= '{:form [:map-destructure {{::sut/keys [role-name]} :k
+                                        {:keys [smash]} ::sut/actions}]
                :init-expr m}
-             (-> result :unform :unform-form :bindings last)))))
-  )
+             (-> result :unform :unform-form :bindings last))))))
 
 (deftest destructuring-guide-examples
   (testing "simple key bindings are destructured into a map"
