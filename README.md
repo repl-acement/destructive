@@ -84,10 +84,8 @@ Yeah, when it's "done" we (or anyone else) can do this again with spec2.
 Editors operate on strings and this tool should be usable from an editor.
 
 ### How far are you along with the features?
-See TODO.
 
-# TODO
-## Associative destructuring 
+#### Associative destructuring 
 - [X] Parse let and get
 - [X] Bindings, top level keys
   - [X] key access in bindings
@@ -105,12 +103,8 @@ See TODO.
   - [X] merge multiple unqualified key access
   - [X] namespaced key access
   - [X] merge multiple namespaced key access
-  - [ ] same for auto-resolved key access
 
-- [ ] Bindings, mix of top level and nested keys & tests
-- [ ] Linter checks on unformed results
-
-## Sequential destructuring
+#### Sequential destructuring
 - [ ] Become motivated to do this
 
 
