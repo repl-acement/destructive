@@ -272,22 +272,6 @@
      :destructuring destructuring
      :input input}))
 
-(defn- accessor-ns->ns-alias
-  [accessor-ns]
-  (let [aliased-nses (reduce-kv (fn [acc k v]
-                                  (conj acc [k (ns-name v)]))
-                                []
-                                (ns-aliases *ns*))
-        result (->> aliased-nses
-                    (filter (fn xx [[accessor-name _]]
-                              (contains? #{accessor-ns} accessor-name)))
-                    first
-                    last)]
-    (doseq [aliased-ns aliased-nses]
-      (prn :aliased-ns aliased-ns))
-    (prn :result result)
-    result))
-
 (defn- inverted-merge
   "This code owes thanks to Thomas Moerman. Bugs are mine." ;; 🙏
   [input]
@@ -404,8 +388,6 @@
                                       (conj acc [k (ns-name v)]))
                                     []
                                     (ns-aliases *ns*))]
-        (doseq [aliased-ns aliased-nses]
-          (prn :aliased-ns aliased-ns))
         (let-form->destructured-let {:inputs {:string-form form-str
                                               :edn-form (first forms)
                                               :spec form-spec}
@@ -416,20 +398,3 @@
   [m, ^Writer w]
   (#'clojure.core/print-meta m w)
   (#'clojure.core/print-map m #'clojure.core/pr-on w))
-
-
-(comment
-  (let [in-exprs '(let [multiplayer-game-state {:joe {:class "Ranger"
-                                                      :weapon "Longbow"
-                                                      :score 100}
-                                                :jane {:class "Knight"
-                                                       :weapon "Greatsword"
-                                                       :score 140}
-                                                :ryan {:class "Wizard"
-                                                       :weapon "Mystic Staff"
-                                                       :score 150}}
-                        class (get-in multiplayer-game-state [:joe :class])
-                        weapon (get-in multiplayer-game-state [:joe :weapon])]
-                    [class weapon])]
-    (let->destructured-let (pr-str in-exprs)))
-  )
